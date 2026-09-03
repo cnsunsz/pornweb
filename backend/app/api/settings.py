@@ -13,7 +13,19 @@ router = APIRouter(prefix="/api/settings", tags=["settings"])
 
 KEYS = ("HTTP_PORT", "BIND_HOST", "PUBLIC_PORT", "MEDIA_ROOT", "APP_NAME")
 _BACKEND_ENV = Path("/www/mediavault/backend/.env")
-_NGINX_VHOST = Path("/www/server/panel/vhost/nginx/mediavault.conf")
+def _nginx_vhost() -> Path:
+    d = Path("/www/server/panel/vhost/nginx")
+    for name in ("html_mediavault.conf", "mediavault.conf"):
+        c = d / name
+        if c.exists() and c.stat().st_size > 0:
+            return c
+    hits = sorted(d.glob("*mediavault*.conf"))
+    for c in hits:
+        if c.stat().st_size > 0:
+            return c
+    return d / "html_mediavault.conf"
+
+_NGINX_VHOST = _nginx_vhost()
 _NGINX_BIN = Path("/www/server/nginx/sbin/nginx")
 _UNIT = Path("/etc/systemd/system/mediavault.service")
 _RESERVED = {22, 25, 888}
@@ -72,14 +84,15 @@ def _write_env_all(updates: dict):
 def _apply_public_port(port: int):
     if port in _RESERVED:
         raise HTTPException(400, f"端口 {port} 不可用作对外 HTTP")
-    if not _NGINX_VHOST.exists():
+    vhost = _nginx_vhost()
+    if not vhost.exists():
         raise HTTPException(500, "未找到 Nginx 站点配置")
-    text = _NGINX_VHOST.read_text(encoding="utf-8")
+    text = vhost.read_text(encoding="utf-8")
     text = re.sub(r"^\s*listen\s+[^;]+;\s*\n", "", text, flags=re.M)
     if "server {" not in text:
         raise HTTPException(500, "Nginx 站点配置格式异常")
     text = text.replace("server {", f"server {{\n    listen {port};", 1)
-    _NGINX_VHOST.write_text(text, encoding="utf-8")
+    vhost.write_text(text, encoding="utf-8")
     subprocess.run(["ufw", "allow", f"{port}/tcp"], check=False, capture_output=True)
     if not _NGINX_BIN.exists():
         raise HTTPException(500, "未找到 Nginx")

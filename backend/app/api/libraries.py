@@ -10,8 +10,10 @@ from ..models.library import MediaLibrary
 from ..models.media import MediaItem
 from ..models.user import User
 from .deps import get_current_user, get_current_admin
-from ..services.scanner import scan_directory, delete_media_by_folder
-from ..core.config import settings
+from ..services.scanner import delete_media_by_folder
+from ..services.scan_runner import (
+    start_scan, get_latest_job, job_to_dict, running_jobs_by_library,
+)
 
 router = APIRouter(prefix="/api/libraries", tags=["libraries"])
 
@@ -29,6 +31,9 @@ class LibraryOut(BaseModel):
     type: str
     count: int = 0
     poster_id: Optional[int] = None
+    scan_status: Optional[str] = None
+    scan_message: Optional[str] = None
+    scan_found: int = 0
 
 
 def _norm(p: str) -> str:
@@ -37,10 +42,18 @@ def _norm(p: str) -> str:
     return str(Path(p)).replace("/", os.sep).rstrip("\\/")
 
 
-def _to_out(lib: MediaLibrary, count: int = 0, poster_id: Optional[int] = None) -> LibraryOut:
+def _to_out(
+    lib: MediaLibrary,
+    count: int = 0,
+    poster_id: Optional[int] = None,
+    scan_status: Optional[str] = None,
+    scan_message: Optional[str] = None,
+    scan_found: int = 0,
+) -> LibraryOut:
     return LibraryOut(
         id=lib.id, name=lib.name, path=lib.path, type=lib.type,
-        count=count, poster_id=poster_id
+        count=count, poster_id=poster_id,
+        scan_status=scan_status, scan_message=scan_message, scan_found=scan_found,
     )
 
 
@@ -53,6 +66,7 @@ async def list_libraries(
     libs = result.scalars().all()
     media_result = db.execute(select(MediaItem))
     items = media_result.scalars().all()
+    jobs = running_jobs_by_library(db)
 
     out = []
     for lib in libs:
@@ -65,7 +79,13 @@ async def list_libraries(
                 count += 1
                 if poster_id is None and item.poster_url:
                     poster_id = item.id
-        out.append(_to_out(lib, count, poster_id))
+        job = jobs.get(lib.id)
+        out.append(_to_out(
+            lib, count, poster_id,
+            scan_status=job.status if job else None,
+            scan_message=job.message if job else None,
+            scan_found=(job.found or 0) if job else 0,
+        ))
     return out
 
 
@@ -124,10 +144,26 @@ async def scan_library(
     lib = result.scalar_one_or_none()
     if not lib:
         raise HTTPException(404, "媒体库不存在")
-    scan_result = scan_directory(
-        settings.MEDIA_ROOT, admin.id, db, lib.path, category_hint=lib.type or ""
+    return start_scan(
+        admin.id, lib.path, library_id=lib.id, category_hint=lib.type or ""
     )
-    return scan_result
+
+
+@router.get("/{lib_id}/scan-status")
+async def scan_status(
+    lib_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user)
+):
+    result = db.execute(select(MediaLibrary).where(MediaLibrary.id == lib_id))
+    lib = result.scalar_one_or_none()
+    if not lib:
+        raise HTTPException(404, "媒体库不存在")
+    job = get_latest_job(db, library_id=lib_id)
+    payload = job_to_dict(job)
+    if payload.get("status") == "idle":
+        payload["library_id"] = lib_id
+    return payload
 
 
 class LibraryPatch(BaseModel):

@@ -61,6 +61,10 @@ export function scanLibrary(id) {
   return api.post(`/libraries/${id}/scan`)
 }
 
+export function getScanStatus(id) {
+  return api.get(`/libraries/${id}/scan-status`)
+}
+
 export function updateLibrary(id, data) {
   return api.put(`/libraries/${id}`, data)
 }

@@ -52,11 +52,19 @@ class ScanRequest(BaseModel):
     folder: str = ""
 
 class ScanResponse(BaseModel):
-    added: int
-    updated: int
-    total: int
+    added: int = 0
+    updated: int = 0
+    total: int = 0
     removed: int = 0
     error: Optional[str] = None
+    status: Optional[str] = None
+    job_id: Optional[int] = None
+    library_id: Optional[int] = None
+    found: int = 0
+    processed: int = 0
+    message: Optional[str] = None
+    phase: Optional[str] = None
+    current: Optional[str] = None
 
 def _parts(item: MediaItem) -> list:
     try:
@@ -357,27 +365,46 @@ async def scan_media(
     db: Session = Depends(get_db),
     admin: User = Depends(get_current_admin)
 ):
+    from ..models.library import MediaLibrary
+    from pathlib import Path as _P
+    from ..services.scan_runner import start_scan
     folder = (req.folder or "").strip()
+    lib_id = None
+    hint = ""
     if folder:
-        from ..models.library import MediaLibrary
-        from pathlib import Path as _P
-        norm = str(_P(folder)).replace("/", "\\").rstrip("\\/")
+        norm = str(_P(folder)).replace("/", os.sep).rstrip("\\/")
         exists = db.execute(select(MediaLibrary))
         already = None
         for lib in exists.scalars():
-            if str(_P(lib.path)).replace("/", "\\").rstrip("\\/").lower() == norm.lower():
+            if str(_P(lib.path)).replace("/", os.sep).rstrip("\\/").lower() == norm.lower():
                 already = lib
                 break
         if already is None:
-            db.add(MediaLibrary(name=_P(norm).name or norm, path=norm, type="movie"))
-            db.flush()
+            lib = MediaLibrary(name=_P(norm).name or norm, path=norm, type="movie")
+            db.add(lib)
+            db.commit()
+            db.refresh(lib)
+            lib_id = lib.id
             hint = "movie"
         else:
+            lib_id = already.id
             hint = already.type or ""
-    else:
-        hint = ""
-    result = scan_directory(settings.MEDIA_ROOT, admin.id, db, folder, category_hint=hint)
-    return ScanResponse(**result)
+    result = start_scan(admin.id, folder or settings.MEDIA_ROOT, library_id=lib_id, category_hint=hint)
+    return ScanResponse(
+        added=result.get("added") or 0,
+        updated=result.get("updated") or 0,
+        total=result.get("total") or 0,
+        removed=result.get("removed") or 0,
+        error=result.get("error"),
+        status=result.get("status"),
+        job_id=result.get("job_id"),
+        library_id=result.get("library_id") or lib_id,
+        found=result.get("found") or 0,
+        processed=result.get("processed") or 0,
+        message=result.get("message"),
+        phase=result.get("phase"),
+        current=result.get("current"),
+    )
 
 class ProgressIn(BaseModel):
     position: float

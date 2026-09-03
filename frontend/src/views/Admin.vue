@@ -14,7 +14,7 @@
         </el-select>
         <el-button type="primary" size="large" :loading="scanning" @click="doScan">{{ t('lib.scan') }}</el-button>
       </div>
-      <el-alert v-if="scanResult" :title="scanText" :type="scanResult.error?'error':'success'" show-icon style="margin-top:12px" @close="scanResult=null" />
+      <el-alert v-if="scanResult" :title="scanText" :type="scanAlertType" show-icon style="margin-top:12px" @close="scanResult=null" />
     </el-card>
 
     <el-card v-if="libs.length">
@@ -23,7 +23,10 @@
         <div v-for="lib in libs" :key="lib.id || lib.path" class="lib-item">
           <div class="lib-info">
             <svg viewBox="0 0 24 24" width="20" height="20"><path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z" fill="var(--accent)"/></svg>
-            <div><div class="lib-name">{{ lib.name }}</div><div class="lib-path">{{ lib.path }} · {{ lib.count || 0 }} 项</div></div>
+            <div>
+              <div class="lib-name">{{ lib.name }}</div>
+              <div class="lib-path">{{ lib.path }} · {{ lib.count || 0 }} 项{{ lib.scan_status === 'running' ? ' · 扫描中' : '' }}</div>
+            </div>
           </div>
           <div class="lib-acts">
             <el-tag :type="lib.type==='movie'?'primary':'warning'" size="small">{{ lib.type==='movie'?t('home.movie'):lib.type==='tvshow'?t('home.show'):t('lib.mixed') }}</el-tag>
@@ -70,7 +73,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMediaStore } from '@/stores/media'
-import { scanMedia, deleteMedia, getPosterUrl, getLibraries, createLibrary, deleteLibrary, scanLibrary, updateLibrary } from '@/api/media'
+import { scanMedia, deleteMedia, getPosterUrl, getLibraries, createLibrary, deleteLibrary, scanLibrary, updateLibrary, getScanStatus } from '@/api/media'
 import { ElMessage, ElMessageBox } from 'element-plus'
 const { t } = useI18n()
 const store = useMediaStore()
@@ -79,7 +82,13 @@ const libPath = ref(''); const libName = ref(''); const libType = ref('movie')
 const scanning = ref(false); const scanResult = ref(null); const pg = ref(1)
 const scanText = computed(() => {
   if (scanResult.value?.error) return scanResult.value.error
+  if (scanResult.value?.message) return scanResult.value.message
   return t('lib.scanDone', { added: scanResult.value?.added||0, updated: scanResult.value?.updated||0, removed: scanResult.value?.removed||0 })
+})
+const scanAlertType = computed(() => {
+  if (scanResult.value?.error || scanResult.value?.status === 'error') return 'error'
+  if (scanResult.value?.status === 'running') return 'info'
+  return 'success'
 })
 function posterUrl(id) { return getPosterUrl(id) }
 
@@ -104,46 +113,63 @@ async function migrateLocal() {
   await loadLibs()
 }
 
+async function pollScan(libId, after) {
+  scanResult.value = { status: 'running', added: 0, updated: 0, removed: 0, found: 0, message: '扫描中…' }
+  for (let i = 0; i < 3600; i++) {
+    try {
+      const res = libId ? await getScanStatus(libId) : null
+      const data = res && res.data
+      if (data) scanResult.value = data
+      await loadLibs()
+      await store.fetchList()
+      const st = data && data.status
+      if (st === 'done' || st === 'error' || st === 'idle') {
+        if (st === 'error') ElMessage.error((data && (data.error || data.message)) || t('lib.scanFail'))
+        else ElMessage.success(t('lib.scanOk'))
+        break
+      }
+    } catch {}
+    await new Promise(r => setTimeout(r, 1500))
+  }
+  if (after) after()
+}
+
 async function doScan() {
   if (!libPath.value.trim()) { ElMessage.warning(t('lib.pathReq')); return }
   if (!libName.value.trim()) { ElMessage.warning(t('lib.nameReq')); return }
   scanning.value = true; scanResult.value = null
   try {
     const created = await createLibrary({ name: libName.value.trim(), path: libPath.value.trim(), type: libType.value })
-    const r = await scanLibrary(created.data.id)
-    scanResult.value = r.data
     libPath.value=''; libName.value=''
-    ElMessage.success(t('lib.scanOk'))
-    await loadLibs()
-    store.fetchList()
+    await scanLibrary(created.data.id)
+    await pollScan(created.data.id, () => { scanning.value = false })
   } catch(e) {
     const detail = e.response?.data?.detail
     if (typeof detail === 'string' && detail.includes('已添加')) {
       try {
         const r = await scanMedia(libPath.value.trim())
-        scanResult.value = r.data
-        ElMessage.success(t('lib.existsRescan'))
-        await loadLibs(); store.fetchList()
+        const jobLib = r.data && r.data.library_id
+        await pollScan(jobLib, () => { scanning.value = false })
       } catch (e2) {
         scanResult.value = { error: e2.response?.data?.detail || t('lib.scanFail') }
+        scanning.value = false
       }
     } else {
       scanResult.value = { error: detail || t('lib.scanFail') }
+      scanning.value = false
     }
   }
-  finally { scanning.value = false }
 }
 async function rescan(lib) {
   lib._sc = true
   try {
     if (lib.id) await scanLibrary(lib.id)
     else await scanMedia(lib.path)
-    ElMessage.success(t('lib.scanOk'))
-    await loadLibs()
-    store.fetchList()
+    await pollScan(lib.id, () => { lib._sc = false })
   } catch (e) {
     ElMessage.error(e.response?.data?.detail || t('lib.scanFail'))
-  } finally { lib._sc = false }
+    lib._sc = false
+  }
 }
 async function removeLib(lib) {
   await ElMessageBox.confirm(t('lib.confirmRemove', { name: lib.name }), t('lib.confirm'))
@@ -183,6 +209,11 @@ onMounted(async () => {
   await store.fetchList()
   await loadLibs()
   await migrateLocal()
+  const run = (libs.value || []).find(l => l.scan_status === 'running')
+  if (run) {
+    scanning.value = true
+    pollScan(run.id, () => { scanning.value = false })
+  }
 })
 </script>
 <style scoped>
