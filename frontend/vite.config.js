@@ -23,6 +23,18 @@ export default defineConfig({
       '@': fileURLToPath(new URL('./src', import.meta.url))
     }
   },
+  build: {
+    rollupOptions: {
+      output: {
+        // Keep element-plus out of the entry chunk so async views never import
+        // the entry module. Cache-busting the entry with ?v= used to load two
+        // Vue runtimes and black-screen /settings.
+        manualChunks(id) {
+          if (id.includes('node_modules/element-plus')) return 'element-plus'
+        }
+      }
+    }
+  },
   server: {
     port: 5173,
     host: true,
