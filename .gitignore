@@ -1,0 +1,27 @@
+﻿# secrets
+.env
+.env.*
+!.env.example
+
+# python
+venv/
+backend/venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# node
+node_modules/
+
+# local media and databases
+backend/media/
+backend/data/*.db
+backend/data/*.db-*
+
+# build artifacts
+*.tar.gz
+*.deb
+
+# os
+.DS_Store
+Thumbs.db

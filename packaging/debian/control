@@ -1,0 +1,14 @@
+Package: mediavault
+Version: 1.0.2
+Section: video
+Priority: optional
+Architecture: all
+Depends: python3 (>= 3.10), python3-venv, python3-pip, nginx
+Maintainer: MediaVault <mediavault@local>
+Homepage: https://gitee.com
+Description: Self-hosted media server (Jellyfin-like)
+ MediaVault is a self-hosted media platform with NFO scanning,
+ user accounts, poster wall, and web playback.
+ Installed to /opt/mediavault. Data lives in /var/lib/mediavault.
+ Remove with: apt remove mediavault
+ Purge data with: apt purge mediavault

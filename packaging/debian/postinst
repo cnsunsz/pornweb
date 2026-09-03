@@ -1,0 +1,58 @@
+#!/bin/sh
+set -e
+
+APP=/opt/mediavault
+DATA=/var/lib/mediavault
+CONF=/etc/mediavault/mediavault.env
+
+case "$1" in
+configure)
+    mkdir -p "$DATA/media" "$DATA" /etc/mediavault
+
+    if [ ! -f "$CONF" ]; then
+        SK=$(python3 -c "import secrets; print(secrets.token_urlsafe(32))")
+        cat > "$CONF" << EOF
+SECRET_KEY=$SK
+MEDIA_ROOT=$DATA/media
+DATABASE_URL=sqlite:////var/lib/mediavault/mediavault.db
+HTTP_PORT=8099
+BIND_HOST=127.0.0.1
+PUBLIC_PORT=80
+CORS_ORIGINS=["*"]
+EOF
+        chmod 600 "$CONF"
+    fi
+
+    echo "MediaVault: creating Python venv..."
+    python3 -m venv "$APP/venv"
+    "$APP/venv/bin/pip" install --upgrade pip setuptools wheel -q
+    "$APP/venv/bin/pip" install --prefer-binary -r "$APP/backend/requirements.txt"
+
+    if command -v systemctl >/dev/null 2>&1; then
+        systemctl daemon-reload || true
+        systemctl enable mediavault.service >/dev/null 2>&1 || true
+        systemctl restart mediavault.service || true
+    fi
+
+    if [ -d /etc/nginx/sites-available ]; then
+        ln -sf /etc/nginx/sites-available/mediavault /etc/nginx/sites-enabled/mediavault || true
+        if nginx -t >/dev/null 2>&1; then
+            systemctl reload nginx >/dev/null 2>&1 || systemctl restart nginx >/dev/null 2>&1 || true
+        else
+            echo "MediaVault: nginx config test failed; backend still runs on 127.0.0.1:8099" >&2
+        fi
+    fi
+
+    echo ""
+    echo "MediaVault installed."
+    echo "  Web:     http://<server-ip>/  or  http://<server-ip>:8096/"
+    echo "  Data:    $DATA"
+    echo "  Config:  $CONF"
+    echo "  Status:  systemctl status mediavault"
+    echo "  Remove:  apt remove mediavault"
+    echo "  Purge:   apt purge mediavault   (also deletes library database)"
+    echo ""
+    ;;
+esac
+
+exit 0

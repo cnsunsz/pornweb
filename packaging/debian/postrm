@@ -1,0 +1,26 @@
+#!/bin/sh
+set -e
+
+case "$1" in
+remove)
+    rm -f /etc/nginx/sites-enabled/mediavault
+    rm -rf /opt/mediavault/venv
+    rmdir /opt/mediavault 2>/dev/null || true
+    if command -v systemctl >/dev/null 2>&1; then
+        systemctl daemon-reload >/dev/null 2>&1 || true
+        systemctl reload nginx >/dev/null 2>&1 || true
+    fi
+    echo "MediaVault removed. Data kept in /var/lib/mediavault (apt purge mediavault to delete it)."
+    ;;
+purge)
+    rm -f /etc/nginx/sites-enabled/mediavault
+    rm -rf /opt/mediavault /etc/mediavault /var/lib/mediavault
+    if command -v systemctl >/dev/null 2>&1; then
+        systemctl daemon-reload >/dev/null 2>&1 || true
+        systemctl reload nginx >/dev/null 2>&1 || true
+    fi
+    echo "MediaVault purged (program + database + config deleted)."
+    ;;
+esac
+
+exit 0

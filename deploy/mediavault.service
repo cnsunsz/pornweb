@@ -1,0 +1,17 @@
+[Unit]
+Description=MediaVault Backend
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/www/mediavault/backend
+ExecStart=/www/mediavault/backend/venv/bin/python run.py
+Restart=always
+RestartSec=5
+Environment=PYTHONUNBUFFERED=1
+Environment=UVICORN_WORKERS=2
+EnvironmentFile=-/etc/mediavault/mediavault.env
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,16 @@
+[Unit]
+Description=MediaVault self-hosted media server
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/mediavault/backend
+EnvironmentFile=-/etc/mediavault/mediavault.env
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/opt/mediavault/venv/bin/python /opt/mediavault/backend/run.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
