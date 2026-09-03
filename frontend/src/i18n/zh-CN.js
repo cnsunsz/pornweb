@@ -85,7 +85,7 @@ export default {
     saved: '已保存',
     savedRestart: '已保存，请重启服务',
     saveFail: '保存失败',
-    restartAlert: '已保存。请重启 MediaVault 服务使端口生效。',
+    restartAlert: '已保存。请重启 PornWeb 服务使端口生效。',
     profile: '资料',
     role: '角色',
     admin: '管理员',

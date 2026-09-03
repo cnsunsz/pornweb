@@ -62,7 +62,7 @@ export default {
     publicHint: 'Nginx の公開ポート（既定 5588、ローカル開発は 5173）',
     paths: 'パス', mediaRoot: '既定のメディアルート', mediaRootPh: 'スキャン時の既定ルート。ライブラリは任意の絶対パス可',
     envFile: '設定ファイル', save: '保存', saved: '保存しました', savedRestart: '保存しました。サービスを再起動してください',
-    saveFail: '保存に失敗しました', restartAlert: '保存しました。ポートを反映するには MediaVault を再起動してください。',
+    saveFail: '保存に失敗しました', restartAlert: '保存しました。ポートを反映するには PornWeb を再起動してください。',
     profile: 'プロフィール', role: '役割', admin: '管理者', user: 'ユーザー', changePw: 'パスワード変更',
     oldPw: '現在', newPw: '新しいパスワード', pwOk: 'パスワードを変更しました', pwFail: '変更に失敗しました', oldPwReq: '現在のパスワードを入力',
     language: '表示言語', languageHint: '既定ではブラウザの言語に従います',

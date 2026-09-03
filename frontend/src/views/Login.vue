@@ -3,7 +3,7 @@
     <div class="auth-card">
       <div class="auth-logo">
         <svg viewBox="0 0 24 24" width="48" height="48"><path d="M8 5v14l11-7z" fill="var(--accent)"/></svg>
-        <h1>MediaVault</h1>
+        <h1>PornWeb</h1>
         <p>{{ t('auth.loginTitle') }}</p>
       </div>
       <el-form ref="formRef" :model="f" :rules="rules" @submit.prevent="submit">

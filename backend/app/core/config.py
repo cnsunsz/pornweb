@@ -9,7 +9,7 @@ _CANDIDATES = [
 _ENV_PATH = next((p for p in _CANDIDATES if p.exists()), _CANDIDATES[-1])
 
 class Settings(BaseSettings):
-    APP_NAME: str = "MediaVault"
+    APP_NAME: str = "PornWeb"
     SECRET_KEY: str = "change-me-in-env"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440  # 24 hours
     DATABASE_URL: str = "sqlite:///./data/mediavault.db"

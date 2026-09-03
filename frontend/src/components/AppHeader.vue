@@ -3,7 +3,7 @@
     <div class="header-inner">
       <router-link to="/" class="logo">
         <svg viewBox="0 0 24 24" width="28" height="28"><path d="M8 5v14l11-7z" fill="var(--accent)"/></svg>
-        <span>MediaVault</span>
+        <span>PornWeb</span>
       </router-link>
 
       <nav class="nav">

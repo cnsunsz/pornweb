@@ -20,7 +20,7 @@ _RESERVED = {22, 25, 888}
 
 
 class ServerSettings(BaseModel):
-    app_name: str = "MediaVault"
+    app_name: str = "PornWeb"
     http_port: int = Field(8099, ge=1, le=65535)
     bind_host: str = "127.0.0.1"
     public_port: int = Field(5588, ge=1, le=65535)
@@ -140,7 +140,7 @@ async def update_settings(req: ServerSettingsUpdate, admin: User = Depends(get_c
     updates = {}
     restart = False
     if req.app_name is not None:
-        name = req.app_name.strip() or "MediaVault"
+        name = req.app_name.strip() or "PornWeb"
         updates["APP_NAME"] = name
         cur.app_name = name
     if req.http_port is not None:

@@ -62,7 +62,7 @@ export default {
     publicHint: 'Nginx public port, default 5588 (local dev uses 5173)',
     paths: 'Paths', mediaRoot: 'Default media root', mediaRootPh: 'Default scan root; libraries can still use any absolute path',
     envFile: 'Config file', save: 'Save', saved: 'Saved', savedRestart: 'Saved. Restart the service.',
-    saveFail: 'Save failed', restartAlert: 'Saved. Restart MediaVault for the port to apply.',
+    saveFail: 'Save failed', restartAlert: 'Saved. Restart PornWeb for the port to apply.',
     profile: 'Profile', role: 'Role', admin: 'Administrator', user: 'User', changePw: 'Change password',
     oldPw: 'Current', newPw: 'New', pwOk: 'Password updated', pwFail: 'Update failed', oldPwReq: 'Enter current password',
     language: 'Display language', languageHint: 'Defaults to your browser language',

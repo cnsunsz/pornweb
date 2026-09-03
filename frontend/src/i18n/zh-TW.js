@@ -62,7 +62,7 @@ export default {
     publicHint: 'Nginx 對外連接埠，預設 5588（本機測試走 5173）',
     paths: '路徑', mediaRoot: '預設媒體根目錄', mediaRootPh: '掃描時的預設根目錄，資料庫仍可填任意絕對路徑',
     envFile: '設定檔', save: '儲存', saved: '已儲存', savedRestart: '已儲存，請重新啟動服務',
-    saveFail: '儲存失敗', restartAlert: '已儲存。請重新啟動 MediaVault 服務使連接埠生效。',
+    saveFail: '儲存失敗', restartAlert: '已儲存。請重新啟動 PornWeb 服務使連接埠生效。',
     profile: '資料', role: '角色', admin: '管理員', user: '使用者', changePw: '修改密碼',
     oldPw: '原密碼', newPw: '新密碼', pwOk: '密碼已修改', pwFail: '修改失敗', oldPwReq: '請輸入原密碼',
     language: '顯示語言', languageHint: '預設跟隨瀏覽器語言',

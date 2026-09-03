@@ -114,7 +114,7 @@ const tab = ref('account')
 const saving = ref(false)
 const restartHint = ref(false)
 const form = reactive({
-  app_name: 'MediaVault',
+  app_name: 'PornWeb',
   http_port: 8099,
   bind_host: '127.0.0.1',
   public_port: 5588,
