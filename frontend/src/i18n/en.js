@@ -1,5 +1,5 @@
 export default {
-  nav: { home: 'Home', console: 'Dashboard', settings: 'Settings', logout: 'Sign out' },
+  nav: { home: 'Home', actors: 'Actors', console: 'Dashboard', settings: 'Settings', logout: 'Sign out' },
   auth: {
     loginTitle: 'Sign in to your account',
     registerTitle: 'Create an account',
@@ -36,9 +36,19 @@ export default {
     newest: 'Newest',
     rating: 'Rating',
     year: 'Year',
+    title: 'Title',
     backAll: '← All libraries',
     empty: 'No media yet',
     addLib: 'Add a library',
+  },
+  actors: {
+    title: 'Actors',
+    search: 'Search actors',
+    works: '{n} titles',
+    empty: 'No actors yet (scan libraries with NFO cast)',
+    noWorks: 'No titles for this actor',
+    back: 'All actors',
+    sortTitle: 'Title',
   },
   media: {
     play: 'Play',

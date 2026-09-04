@@ -19,7 +19,15 @@
             <el-tag v-for="g in item.genre.split(',')" :key="g" size="small" effect="plain" type="info">{{ g.trim() }}</el-tag>
           </div>
           <p v-if="item.director" class="dim"><strong>{{ t('media.director') }}</strong> {{ item.director }}</p>
-          <p v-if="cast.length" class="dim"><strong>{{ t('media.cast') }}</strong> {{ cast.join('、') }}</p>
+          <div v-if="cast.length" class="dim cast-row">
+            <strong>{{ t('media.cast') }}</strong>
+            <router-link
+              v-for="name in cast"
+              :key="name"
+              class="cast-chip"
+              :to="{ name: 'ActorDetail', params: { name } }"
+            >{{ name }}</router-link>
+          </div>
           <div v-if="item.plot" class="plot"><h3>{{ t('media.plot') }}</h3><p>{{ item.plot }}</p></div>
           <div class="btns">
             <el-button type="primary" size="large" round @click="play"><svg viewBox="0 0 24 24" width="18" height="18" style="margin-right:6px"><path d="M8 5v14l11-7z" fill="#fff"/></svg>{{ t('media.play') }}</el-button>
@@ -89,4 +97,12 @@ function fmtTime(s) { const m=Math.floor(s/60), sec=Math.floor(s%60); return m +
 .btns { display:flex; gap:10px; margin-top:8px; }
 .parts { display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; }
 .loading { display:flex; justify-content:center; padding:80px; color:var(--accent); }
+
+.cast-row { display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+.cast-chip {
+  display:inline-block; padding:2px 10px; border-radius:999px;
+  background: var(--bg-hover); color: var(--text); font-size:12px;
+  border: 1px solid var(--border); transition: background 0.15s, color 0.15s;
+}
+.cast-chip:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
 </style>

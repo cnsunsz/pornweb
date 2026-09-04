@@ -18,6 +18,18 @@ const routes = [
     component: () => import('@/views/Register.vue')
   },
   {
+    path: '/actors',
+    name: 'Actors',
+    component: () => import('@/views/Actors.vue'),
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/actors/:name',
+    name: 'ActorDetail',
+    component: () => import('@/views/Actors.vue'),
+    meta: { requiresAuth: true }
+  },
+  {
     path: '/media/:id',
     name: 'MediaDetail',
     component: () => import('@/views/MediaDetail.vue'),

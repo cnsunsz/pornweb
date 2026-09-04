@@ -1,5 +1,5 @@
 export default {
-  nav: { home: '首页', console: '控制台', settings: '设置', logout: '退出登录' },
+  nav: { home: '首页', actors: '演员', console: '控制台', settings: '设置', logout: '退出登录' },
   auth: {
     loginTitle: '登录您的账户',
     registerTitle: '创建新账户',
@@ -36,9 +36,19 @@ export default {
     newest: '最新',
     rating: '评分',
     year: '年份',
+    title: '标题',
     backAll: '← 返回全部',
     empty: '暂无媒体内容',
     addLib: '去添加媒体库',
+  },
+  actors: {
+    title: '演员表',
+    search: '搜索演员',
+    works: '{n} 部作品',
+    empty: '暂无演员数据（请先扫库并确保 NFO 含演员）',
+    noWorks: '该演员暂无作品',
+    back: '全部演员',
+    sortTitle: '标题',
   },
   media: {
     play: '播放',

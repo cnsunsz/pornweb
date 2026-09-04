@@ -1,5 +1,5 @@
 export default {
-  nav: { home: '首頁', console: '控制台', settings: '設定', logout: '登出' },
+  nav: { home: '首頁', actors: '演員', console: '控制台', settings: '設定', logout: '登出' },
   auth: {
     loginTitle: '登入您的帳戶',
     registerTitle: '建立新帳戶',
@@ -36,9 +36,19 @@ export default {
     newest: '最新',
     rating: '評分',
     year: '年份',
+    title: '標題',
     backAll: '← 返回全部',
     empty: '暫無媒體內容',
     addLib: '去新增媒體庫',
+  },
+  actors: {
+    title: '演員表',
+    search: '搜尋演員',
+    works: '{n} 部作品',
+    empty: '暫無演員資料（請先掃庫並確保 NFO 含演員）',
+    noWorks: '該演員暫無作品',
+    back: '全部演員',
+    sortTitle: '標題',
   },
   media: {
     play: '播放',

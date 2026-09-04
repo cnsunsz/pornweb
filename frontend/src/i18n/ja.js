@@ -1,5 +1,5 @@
 export default {
-  nav: { home: 'ホーム', console: 'ダッシュボード', settings: '設定', logout: 'ログアウト' },
+  nav: { home: 'ホーム', actors: '出演者', console: 'ダッシュボード', settings: '設定', logout: 'ログアウト' },
   auth: {
     loginTitle: 'アカウントにログイン',
     registerTitle: 'アカウントを作成',
@@ -36,9 +36,19 @@ export default {
     newest: '新しい順',
     rating: '評価',
     year: '年',
+    title: 'タイトル',
     backAll: '← すべて',
     empty: 'メディアがありません',
     addLib: 'ライブラリを追加',
+  },
+  actors: {
+    title: '出演者',
+    search: '出演者を検索',
+    works: '{n} 作品',
+    empty: '出演者データがありません（NFO に出演者があるライブラリをスキャン）',
+    noWorks: 'この出演者の作品はありません',
+    back: 'すべての出演者',
+    sortTitle: 'タイトル',
   },
   media: {
     play: '再生',
