@@ -13,6 +13,7 @@
 - **在线播放**：Range 流式传输，支持继续观看、分段、画中画
 - **用户**：注册 / 登录 / JWT；管理员可管用户和服务器设置
 - **服务器设置**：后端端口、监听地址（`127.0.0.1` / `0.0.0.0`）、对外 HTTP 端口；保存监听地址或后端端口会重启服务
+- **演员表**：从 NFO `cast_list` 聚合演员；Web 导航「演员」；API 可供 Android 客户端复用（见下）
 - **多语言**：`zh-CN`、`zh-TW`、`en`、`ja`
 
 ## 技术栈
@@ -103,7 +104,34 @@ Debian 包说明见 `packaging/README.md`。
 
 ## 前端构建注意
 
-打包时会把 **Element Plus 拆成独立 chunk**，避免异步页面去引用入口 bundle。不要给入口 JS 加 `?v=` 这类查询串做缓存刷新，否则可能加载两份 Vue 运行时，控制台黑屏。需要刷新时改文件名 hash，或只禁止缓存 `index.html`。
+不要把 **Element Plus 单独拆成 `manualChunks`**（会导致黑屏：`t is not a function`）。也不要给入口 JS 加 `?v=` 缓存刷新串。需要刷新时依赖文件名 hash，或只禁止缓存 `index.html`。
+
+
+## 演员表 API（Web / Android）
+
+鉴权与 `/api/media/*` 相同：`Authorization: Bearer <token>`。路径中的演员名（含日文 / 中文）请 **URL 编码**（例如 `encodeURIComponent` / `URLEncoder`）。
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| GET | `/api/actors` | 演员列表。可选 `?search=` |
+| GET | `/api/actors/{name}/media` | **推荐**：该演员作品分页列表 |
+| GET | `/api/actors/{name}` | 同上（兼容别名） |
+| GET | `/api/actors/by-name?name=` | 查询参数传姓名（免路径编码） |
+
+**列表响应** `GET /api/actors`：
+
+```json
+{
+  "items": [
+    { "name": "三上悠亜", "count": 12, "poster_url": "/api/media/poster/42" }
+  ],
+  "total": 1
+}
+```
+
+`poster_url` 为空串表示尚无可用海报；取图时仍需带 token（或与海报接口一致的 `?token=`）。可选字段 `poster_media_id` 可忽略。
+
+**作品列表响应** 与 `GET /api/media/list` 相同：`{ items, total, page, page_size }`（每项为 `MediaResponse`）。查询参数：`page`、`page_size`、`sort`（`newest` / `title` / `rating` / `year`）。
 
 ## 许可
 

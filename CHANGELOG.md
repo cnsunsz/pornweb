@@ -4,7 +4,11 @@
 ### 新增
 - Emby / Jellyfin 风格**演员表**：从 NFO `cast_list` 聚合全库演员，导航「演员」页展示姓名、作品数与海报缩略图；支持搜索过滤
 - 点击演员进入其作品列表（卡片样式同首页）；详情页演员名改为可点击芯片，跳转对应演员页
-- 后端 API：`GET /api/actors`、`GET /api/actors/{name}`（及 `?name=` 备选），鉴权与媒体列表一致；稳健解析 JSON / 分隔符，过滤空占位，保留「佚名」
+- 后端 API（Web / Android 共用，Bearer JWT）：
+  - `GET /api/actors` → `{ items: [{ name, count, poster_url }], total }`（`poster_url` 如 `/api/media/poster/{id}`，可空）
+  - `GET /api/actors/{name}/media` → 与 `/api/media/list` 相同的 `MediaListResponse`（**推荐**；CJK 姓名须 URL 编码）
+  - 兼容：`GET /api/actors/{name}`、`GET /api/actors/by-name?name=`
+  - 稳健解析 JSON / 分隔符，过滤空占位，保留「佚名」
 
 ## v1.2.0
 ### 新增

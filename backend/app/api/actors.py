@@ -1,10 +1,18 @@
-"""演员表 API：从 media_items.cast_list（NFO JSON）聚合演员列表与作品。"""
+"""演员表 API：从 media_items.cast_list（NFO JSON）聚合演员列表与作品。
+
+Android / Web 共用稳定契约（Bearer JWT，与 /api/media 相同）：
+  GET /api/actors
+    → { items: [{ name, count, poster_url }], total }
+  GET /api/actors/{name}/media   （推荐；name 须 URL 编码，含 CJK）
+    → MediaListResponse 同 /api/media/list
+  兼容别名：GET /api/actors/{name} 、 GET /api/actors/by-name?name=
+"""
 import json
 from typing import List, Optional
 from urllib.parse import unquote
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import select, desc
 from sqlalchemy.orm import Session
 
@@ -13,7 +21,7 @@ from ..models.media import MediaItem
 from ..models.user import User
 from ..models.progress import PlaybackProgress
 from .deps import get_current_user
-from .media import MediaResponse, MediaListResponse, _to_response
+from .media import MediaListResponse, _to_response
 
 router = APIRouter(prefix="/api/actors", tags=["actors"])
 
@@ -71,10 +79,14 @@ def _parse_cast(raw: Optional[str]) -> List[str]:
 
 
 class ActorItem(BaseModel):
+    """稳定字段供 Android / Web 共用；poster_url 为相对路径，需带 Authorization 或 ?token=。"""
     name: str
     count: int
-    poster_url: str = ""  # /api/media/poster/{id}，前端再拼 token
-    poster_media_id: Optional[int] = None
+    poster_url: str = ""  # 例 /api/media/poster/12 ；无海报时为空串
+    poster_media_id: Optional[int] = Field(
+        default=None,
+        description="可选：用于拼海报的媒体 id；Android 可忽略，只用 poster_url",
+    )
 
 
 class ActorListResponse(BaseModel):
@@ -152,12 +164,12 @@ async def actor_media_by_query(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    """按查询参数取演员作品（CJK 友好备选）。"""
+    """查询参数取演员作品（CJK 友好备选，无需路径编码）。"""
     return await _actor_media(_decode_name(name), page, page_size, sort, db, user)
 
 
-@router.get("/{name}", response_model=MediaListResponse)
-async def actor_media(
+@router.get("/{name}/media", response_model=MediaListResponse)
+async def actor_media_preferred(
     name: str,
     page: int = Query(1, ge=1),
     page_size: int = Query(40, ge=1, le=100),
@@ -165,7 +177,20 @@ async def actor_media(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    """按路径参数取演员作品；name 需 URL 编码（含 CJK）。"""
+    """推荐：演员作品列表（Android / Web）。name 须 URL 编码。"""
+    return await _actor_media(_decode_name(name), page, page_size, sort, db, user)
+
+
+@router.get("/{name}", response_model=MediaListResponse)
+async def actor_media_alias(
+    name: str,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(40, ge=1, le=100),
+    sort: str = Query("newest"),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """兼容别名，等同 GET /api/actors/{name}/media。"""
     return await _actor_media(_decode_name(name), page, page_size, sort, db, user)
 
 
@@ -194,9 +219,6 @@ async def _actor_media(
 
     all_items = db.execute(query).scalars().all()
     matched = [i for i in all_items if name in _parse_cast(i.cast_list)]
-    if not matched:
-        # 仍返回空列表，前端显示空态；不强制 404（方便搜索拼写）
-        pass
 
     total = len(matched)
     start = (page - 1) * page_size
