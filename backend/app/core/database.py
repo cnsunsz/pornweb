@@ -29,17 +29,26 @@ def get_db():
         db.close()
 
 def _migrate_media_columns(sync_conn):
+    """Additive SQLite ALTERs; tolerate multi-worker races (duplicate column)."""
     try:
         rows = sync_conn.execute(text("PRAGMA table_info(media_items)")).fetchall()
     except Exception:
         return
     cols = {r[1] for r in rows}
+    alters = []
     if "extra_files" not in cols:
-        sync_conn.execute(text("ALTER TABLE media_items ADD COLUMN extra_files TEXT DEFAULT '[]'"))
+        alters.append("ALTER TABLE media_items ADD COLUMN extra_files TEXT DEFAULT '[]'")
     if "duration" not in cols:
-        sync_conn.execute(text("ALTER TABLE media_items ADD COLUMN duration FLOAT DEFAULT 0"))
+        alters.append("ALTER TABLE media_items ADD COLUMN duration FLOAT DEFAULT 0")
     if "nfo_mtime" not in cols:
-        sync_conn.execute(text("ALTER TABLE media_items ADD COLUMN nfo_mtime FLOAT"))
+        alters.append("ALTER TABLE media_items ADD COLUMN nfo_mtime FLOAT")
+    for sql in alters:
+        try:
+            sync_conn.execute(text(sql))
+        except Exception as exc:
+            # Another uvicorn worker may have added the column first.
+            if "duplicate column" not in str(exc).lower():
+                raise
 
 def init_db():
     from ..models import User, MediaItem, MediaLibrary, PlaybackProgress, ScanJob  # noqa: F401
