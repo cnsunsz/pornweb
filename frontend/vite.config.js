@@ -23,18 +23,10 @@ export default defineConfig({
       '@': fileURLToPath(new URL('./src', import.meta.url))
     }
   },
-  build: {
-    rollupOptions: {
-      output: {
-        // Keep element-plus out of the entry chunk so async views never import
-        // the entry module. Cache-busting the entry with ?v= used to load two
-        // Vue runtimes and black-screen /settings.
-        manualChunks(id) {
-          if (id.includes('node_modules/element-plus')) return 'element-plus'
-        }
-      }
-    }
-  },
+  // Do not put element-plus alone in manualChunks (breaks Element Plus / Vue interop:
+  // "t is not a function" → black screen). Do not cache-bust entry with ?v=;
+  // Nginx no-store on index.html is enough. Settings may import shared exports
+  // from the entry module which is fine as a single ES module URL.
   server: {
     port: 5173,
     host: true,

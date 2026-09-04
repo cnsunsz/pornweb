@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.1.1
+### 修复
+- 去掉错误的 Element Plus `manualChunks`（仅拆出 element-plus），修复控制台黑屏（`t is not a function`，Vue 无法挂载）
+- 说明：v1.1.0 功能（扫库进度条、播放设置、PotPlayer 风格快捷键等）仍在；本次仅修正打包分块导致的运行时崩溃
+
 ## v1.1.0
 ### 新增
 - Emby / Jellyfin 风格扫库进度条：媒体库管理页按库显示进度、阶段文案与 found/added/updated/removed/processed 计数；`found > 0` 时按 `processed/found` 计算百分比，否则扫描中显示条纹不确定进度；顶部可粘性精简进度条；扫描按钮在对应库扫描时保持 loading/禁用；仍为后台非阻塞扫描
