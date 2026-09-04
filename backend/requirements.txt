@@ -8,3 +8,4 @@ httpx>=0.28.1
 defusedxml>=0.7.1
 python-multipart>=0.0.20
 pydantic-settings>=2.8.1
+watchdog>=4.0.0

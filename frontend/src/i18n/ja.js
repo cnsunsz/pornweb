@@ -68,6 +68,12 @@ export default {
     saveFail: '保存に失敗しました', restartAlert: '保存しました。ポートを反映するには PornWeb を再起動してください。',
     profile: 'プロフィール', role: '役割', admin: '管理者', user: 'ユーザー', changePw: 'パスワード変更',
     oldPw: '現在', newPw: '新しいパスワード', pwOk: 'パスワードを変更しました', pwFail: '変更に失敗しました', oldPwReq: '現在のパスワードを入力',
+    autoScan: '自動ライブラリ更新',
+    autoScanHint: 'Emby / Jellyfin 風：フォルダ監視と定期フルスキャン（rclone FUSE は主に定期スキャンに依存）。',
+    autoScanEnabled: '自動スキャンを有効',
+    autoScanEnabledHint: 'オフ時は手動スキャンのみ',
+    autoScanInterval: '間隔（分）',
+    autoScanIntervalHint: '既定 15 分。FUSE では短くしすぎないでください',
     language: '表示言語', languageHint: '既定ではブラウザの言語に従います',
   },
   lib: {
@@ -87,6 +93,11 @@ export default {
     scanAdded: '追加 {n}',
     scanUpdated: '更新 {n}',
     scanRemoved: '削除 {n}',
+    phaseDiscover: 'ファイル検出',
+    phaseMetadata: 'メタデータ読込',
+    phaseCleanup: '削除クリーンアップ',
+    phaseDone: '完了',
+
   },
   users: {
     title: 'ユーザー管理', add: 'ユーザー追加', edit: 'ユーザー編集', user: 'ユーザー', role: '役割',

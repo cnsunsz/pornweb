@@ -20,11 +20,21 @@ async def lifespan(app: FastAPI):
         mark_stale_jobs()
     except Exception:
         pass
+    try:
+        from .services.library_watcher import start_library_watcher
+        start_library_watcher()
+    except Exception:
+        pass
     yield
+    try:
+        from .services.library_watcher import stop_library_watcher
+        stop_library_watcher()
+    except Exception:
+        pass
 
 app = FastAPI(
     title=settings.APP_NAME,
-    version="1.0.0",
+    version="1.2.0",
     lifespan=lifespan
 )
 

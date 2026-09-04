@@ -30,6 +30,8 @@ class MediaItem(Base):
     folder = Column(String(1000), default="/")
     extra_files = Column(Text, default="[]")  # JSON [{label, path}]
     duration = Column(Float, default=0)
+    # NFO file mtime when last parsed — skip re-read on rclone if unchanged
+    nfo_mtime = Column(Float, nullable=True)
     
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))

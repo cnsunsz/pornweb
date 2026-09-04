@@ -38,6 +38,8 @@ def _migrate_media_columns(sync_conn):
         sync_conn.execute(text("ALTER TABLE media_items ADD COLUMN extra_files TEXT DEFAULT '[]'"))
     if "duration" not in cols:
         sync_conn.execute(text("ALTER TABLE media_items ADD COLUMN duration FLOAT DEFAULT 0"))
+    if "nfo_mtime" not in cols:
+        sync_conn.execute(text("ALTER TABLE media_items ADD COLUMN nfo_mtime FLOAT"))
 
 def init_db():
     from ..models import User, MediaItem, MediaLibrary, PlaybackProgress, ScanJob  # noqa: F401

@@ -68,6 +68,12 @@ export default {
     saveFail: 'Save failed', restartAlert: 'Saved. Restart PornWeb for the port to apply.',
     profile: 'Profile', role: 'Role', admin: 'Administrator', user: 'User', changePw: 'Change password',
     oldPw: 'Current', newPw: 'New', pwOk: 'Password updated', pwFail: 'Update failed', oldPwReq: 'Enter current password',
+    autoScan: 'Auto library scan',
+    autoScanHint: 'Emby / Jellyfin style: watch library folders and run a periodic full scan (rclone FUSE relies mainly on the timer).',
+    autoScanEnabled: 'Enable auto-scan',
+    autoScanEnabledHint: 'When off, only manual scans run',
+    autoScanInterval: 'Interval (minutes)',
+    autoScanIntervalHint: 'Default 15; avoid very short intervals on FUSE',
     language: 'Display language', languageHint: 'Defaults to your browser language',
   },
   lib: {
@@ -87,6 +93,11 @@ export default {
     scanAdded: 'added {n}',
     scanUpdated: 'updated {n}',
     scanRemoved: 'removed {n}',
+    phaseDiscover: 'Discovering files',
+    phaseMetadata: 'Reading metadata',
+    phaseCleanup: 'Cleaning removed',
+    phaseDone: 'Done',
+
   },
   users: {
     title: 'Users', add: 'Add user', edit: 'Edit user', user: 'User', role: 'Role',

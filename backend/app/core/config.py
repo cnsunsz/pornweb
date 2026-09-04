@@ -18,7 +18,10 @@ class Settings(BaseSettings):
     HTTP_PORT: int = 8099
     BIND_HOST: str = "127.0.0.1"
     PUBLIC_PORT: int = 5588
-    
+    # Emby-style auto library scan (watchdog + periodic safety net for rclone FUSE)
+    AUTO_SCAN_ENABLED: bool = True
+    AUTO_SCAN_INTERVAL_MINUTES: int = 15
+
     class Config:
         env_file = str(_ENV_PATH)
         env_file_encoding = "utf-8"

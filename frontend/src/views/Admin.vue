@@ -18,7 +18,7 @@
         status="success"
       />
       <div class="scan-meta">
-        <span v-if="stickyScan.status.phase || stickyScan.status.message">{{ stickyScan.status.phase || stickyScan.status.message }}</span>
+        <span v-if="phaseText(stickyScan.status)">{{ phaseText(stickyScan.status) }}</span>
         <span v-if="stickyScan.status.current" class="scan-current">{{ stickyScan.status.current }}</span>
         <span class="scan-counts">{{ formatCounts(stickyScan.status) }}</span>
       </div>
@@ -62,7 +62,7 @@
           <!-- Per-library Emby/Jellyfin-style scan progress -->
           <div v-if="statusFor(lib)" class="lib-scan">
             <div class="lib-scan-row">
-              <span class="lib-scan-phase">{{ statusFor(lib).phase || statusFor(lib).message || t('lib.scanning') }}</span>
+              <span class="lib-scan-phase">{{ phaseText(statusFor(lib)) }}</span>
               <span v-if="scanPercent(statusFor(lib)) != null" class="lib-scan-pct">{{ scanPercent(statusFor(lib)) }}%</span>
             </div>
             <el-progress
@@ -172,13 +172,34 @@ function isLibScanning(lib) {
   return isRunningStatus(st) || !!lib?._sc
 }
 
+
+/** Human-readable phase / message for Emby-style progress UI. */
+function phaseText(st) {
+  if (!st) return ''
+  if (st.message) return st.message
+  const map = {
+    discover: 'lib.phaseDiscover',
+    metadata: 'lib.phaseMetadata',
+    cleanup: 'lib.phaseCleanup',
+    done: 'lib.phaseDone',
+  }
+  if (st.phase && map[st.phase]) return t(map[st.phase])
+  return t('lib.scanning')
+}
+
 /** Determinate % from processed/found (or current numeric), else null → indeterminate. */
 function scanPercent(st) {
   if (!st) return null
+  if (st.status === 'done' || st.phase === 'done') return 100
   const found = Number(st.found) || 0
   const processed = Number(st.processed) || 0
+  // Metadata phase: processed climbs 1..found — show determinate bar.
+  if (st.phase === 'metadata' && found > 0) {
+    return Math.min(100, Math.round((processed / found) * 100))
+  }
+  // Discover: counts grow but we don't know total yet → indeterminate.
+  if (st.phase === 'discover') return null
   if (found > 0) return Math.min(100, Math.round((processed / found) * 100))
-  if (st.status === 'done') return 100
   return null
 }
 

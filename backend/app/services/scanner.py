@@ -1,7 +1,9 @@
 import os
 import json
+import time
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Callable, Dict, Optional, Set, List, Tuple
+from typing import Callable, Dict, Optional, Set, List, Tuple, Any
 from collections import defaultdict
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -22,6 +24,9 @@ FANART_NAMES = ["fanart", "backdrop", "background"]
 
 ProgressCb = Optional[Callable[[Dict], None]]
 
+# Throttle job-progress DB writes so they don't amplify rclone latency.
+_PROGRESS_MIN_INTERVAL = 0.5
+
 
 def _should_skip(dirpath: str) -> bool:
     name = Path(dirpath).name
@@ -38,6 +43,7 @@ def _rel_path(path: Path, media_root: str) -> str:
 
 
 def _safe_size(paths: List[Path]) -> int:
+    """Best-effort size; never let one hung/stat-error kill the scan."""
     total = 0
     for p in paths:
         try:
@@ -45,6 +51,13 @@ def _safe_size(paths: List[Path]) -> int:
         except OSError:
             pass
     return total
+
+
+def _safe_mtime(path: Path) -> Optional[float]:
+    try:
+        return path.stat().st_mtime
+    except OSError:
+        return None
 
 
 def _images_from_files(root_path: Path, files: List[str], stem: str) -> Dict[str, str]:
@@ -97,6 +110,67 @@ def _parse_nfo_safe(nfo_path: str) -> Dict:
         return {}
 
 
+def _has_usable_meta(item: MediaItem) -> bool:
+    return bool(
+        (item.title or "").strip()
+        and ((item.plot or "").strip() or (item.poster_url or "").strip())
+    )
+
+
+def _should_skip_nfo(item: MediaItem, nfo_path: Optional[Path], is_new: bool) -> bool:
+    """Skip re-parse when existing row already has meta and NFO mtime is unchanged."""
+    if is_new or not nfo_path:
+        return False
+    if not _has_usable_meta(item):
+        return False
+    mtime = _safe_mtime(nfo_path)
+    if mtime is None:
+        return False
+    stored = getattr(item, "nfo_mtime", None)
+    if stored is not None and float(stored) >= mtime:
+        return True
+    # Fallback: compare against updated_at when nfo_mtime column not yet filled.
+    updated = getattr(item, "updated_at", None)
+    if updated is not None and stored is None:
+        try:
+            ts = updated.timestamp() if updated.tzinfo else updated.replace(tzinfo=timezone.utc).timestamp()
+            if ts >= mtime:
+                return True
+        except Exception:
+            pass
+    return False
+
+
+class _ThrottledProgress:
+    """Forward progress to CB at most every N seconds; always flush phase/done/error."""
+
+    def __init__(self, cb: ProgressCb, min_interval: float = _PROGRESS_MIN_INTERVAL):
+        self._cb = cb
+        self._min_interval = min_interval
+        self._last = 0.0
+        self._last_phase = None
+
+    def __call__(self, info: Dict):
+        if not self._cb:
+            return
+        phase = info.get("phase")
+        force = (
+            phase in ("done", "cleanup", "error")
+            or info.get("error")
+            or (phase is not None and phase != self._last_phase)
+        )
+        now = time.monotonic()
+        if not force and (now - self._last) < self._min_interval:
+            return
+        self._last = now
+        if phase is not None:
+            self._last_phase = phase
+        try:
+            self._cb(info)
+        except Exception:
+            pass
+
+
 def scan_directory(
     media_root: str,
     user_id: int,
@@ -114,16 +188,18 @@ def scan_directory(
     else:
         scan_path = Path(media_root)
 
-    def notify(info: Dict):
-        if progress_cb:
-            try:
-                progress_cb(info)
-            except Exception:
-                pass
+    notify = _ThrottledProgress(progress_cb)
 
-    if not scan_path.exists():
+    try:
+        path_ok = scan_path.exists()
+    except OSError as exc:
+        err = f"路径不可访问: {scan_path} ({exc})"
+        notify({"status": "error", "phase": "error", "error": err, "message": err})
+        return {"added": 0, "updated": 0, "total": 0, "removed": 0, "found": 0, "error": err}
+
+    if not path_ok:
         err = f"路径不存在: {scan_path}"
-        notify({"status": "error", "error": err, "message": err})
+        notify({"status": "error", "phase": "error", "error": err, "message": err})
         return {"added": 0, "updated": 0, "total": 0, "removed": 0,
                 "found": 0, "error": err}
 
@@ -136,6 +212,8 @@ def scan_directory(
     added = 0
     updated = 0
     found_paths: Set[str] = set()
+    # Deferred metadata work: (item, all_parts, nfo_path, root_path, files, first_stem, base_title, category, is_new)
+    pending_meta: List[Dict[str, Any]] = []
 
     existing_map: Dict[str, MediaItem] = {}
     try:
@@ -146,8 +224,9 @@ def scan_directory(
         existing_map = {}
 
     def onerror(err):
-        notify({"message": f"跳过无法访问的路径: {err}"})
+        notify({"phase": "discover", "message": f"跳过无法访问的路径: {err}"})
 
+    # ── Phase 1: discover & upsert rows quickly ──────────────────────────
     for root, dirs, files in os.walk(scan_path, onerror=onerror):
         dirs[:] = [d for d in dirs if not _should_skip(d)]
         root_path = Path(root)
@@ -194,7 +273,6 @@ def scan_directory(
             part_count = len(parts)
             display_name = primary_video.name + (f" +{part_count-1}" if is_multipart else "")
 
-            nfo_type = ""
             if category_hint in ("movie", "tvshow"):
                 category = category_hint
             else:
@@ -203,6 +281,7 @@ def scan_directory(
                 category = "tvshow" if is_tv else "movie"
 
             existing = existing_map.get(rel_path)
+            is_new = existing is None
             if existing:
                 existing.filename = display_name
                 existing.extra_files = extra_json
@@ -239,6 +318,32 @@ def scan_directory(
                 except Exception:
                     pass
 
+            # Resolve NFO path for later metadata phase
+            nfo_path: Optional[Path] = None
+            for stem_to_try in [first_stem, base_title, base_title.lower()]:
+                if stem_to_try in nfos_in_dir:
+                    nfo_path = nfos_in_dir[stem_to_try]
+                    break
+            if nfo_path is None:
+                for fallback in ["tvshow.nfo", "movie.nfo"]:
+                    real = files_lower.get(fallback)
+                    if real:
+                        nfo_path = root_path / real
+                        break
+
+            pending_meta.append({
+                "item": existing,
+                "all_parts": all_parts,
+                "nfo_path": nfo_path,
+                "root_path": root_path,
+                "files": files,
+                "first_stem": first_stem,
+                "base_title": base_title,
+                "category_hint": category_hint,
+                "category": category,
+                "is_new": is_new,
+            })
+
             notify({
                 "phase": "discover",
                 "current": rel_path,
@@ -249,30 +354,54 @@ def scan_directory(
                 "message": f"扫描中：已入库 {added + updated} 项（新增 {added}，更新 {updated}）",
             })
 
-            # Metadata (NFO / local images / size) — never abort the library
-            nfo_data = {}
-            try:
-                for stem_to_try in [first_stem, base_title, base_title.lower()]:
-                    if stem_to_try in nfos_in_dir:
-                        nfo_data = _parse_nfo_safe(str(nfos_in_dir[stem_to_try]))
-                        if nfo_data:
-                            break
-                if not nfo_data:
-                    for fallback in ["tvshow.nfo", "movie.nfo"]:
-                        real = files_lower.get(fallback)
-                        if real:
-                            nfo_data = _parse_nfo_safe(str(root_path / real))
-                            if nfo_data:
-                                break
-            except Exception:
-                nfo_data = {}
+    total_found = added + updated
+    meta_total = len(pending_meta)
 
-            try:
-                local_images = _images_from_files(root_path, files, first_stem)
-            except Exception:
-                local_images = {"poster": "", "fanart": ""}
+    # ── Phase 2: NFO / local images / size (visible metadata progress) ───
+    notify({
+        "phase": "metadata",
+        "found": total_found,
+        "added": added,
+        "updated": updated,
+        "processed": 0,
+        "message": f"正在读取元数据（0/{meta_total}）",
+    })
 
-            try:
+    for idx, work in enumerate(pending_meta, start=1):
+        existing: MediaItem = work["item"]
+        all_parts: List[Path] = work["all_parts"]
+        nfo_path: Optional[Path] = work["nfo_path"]
+        root_path: Path = work["root_path"]
+        files: List[str] = work["files"]
+        first_stem: str = work["first_stem"]
+        base_title: str = work["base_title"]
+        category = work["category"]
+        category_hint = work["category_hint"]
+        is_new: bool = work["is_new"]
+
+        display = (existing.title or base_title or existing.filename or "")[:80]
+        notify({
+            "phase": "metadata",
+            "current": existing.file_path or "",
+            "found": total_found,
+            "added": added,
+            "updated": updated,
+            "processed": idx,
+            "message": f"正在读取元数据：{display} ({idx}/{meta_total})",
+        })
+
+        skip_nfo = _should_skip_nfo(existing, nfo_path, is_new)
+        nfo_data: Dict = {}
+        if not skip_nfo and nfo_path is not None:
+            nfo_data = _parse_nfo_safe(str(nfo_path))
+
+        try:
+            local_images = _images_from_files(root_path, files, first_stem)
+        except Exception:
+            local_images = {"poster": "", "fanart": ""}
+
+        try:
+            if nfo_data:
                 poster = (
                     nfo_data.get("poster_url", "")
                     or local_images.get("poster", "")
@@ -299,20 +428,37 @@ def scan_directory(
                 existing.title = title
                 existing.category = category
                 existing.file_type = category
+                if nfo_path is not None:
+                    mt = _safe_mtime(nfo_path)
+                    if mt is not None and hasattr(existing, "nfo_mtime"):
+                        existing.nfo_mtime = float(mt)
+            elif not skip_nfo:
+                # No NFO — still apply local images if missing
+                if not (existing.poster_url or "").strip() and local_images.get("poster"):
+                    existing.poster_url = local_images["poster"]
+                if not (existing.fanart_url or "").strip() and local_images.get("fanart"):
+                    existing.fanart_url = local_images["fanart"]
+
+            # Skip expensive rclone stat on unchanged existing items with size already set.
+            need_size = is_new or not (existing.file_size and existing.file_size > 0)
+            if need_size:
                 existing.file_size = _safe_size(all_parts)
-                db.commit()
+
+            existing.updated_at = datetime.now(timezone.utc)
+            db.commit()
+        except Exception:
+            try:
+                db.rollback()
             except Exception:
-                try:
-                    db.rollback()
-                except Exception:
-                    pass
+                pass
 
     notify({
         "phase": "cleanup",
         "message": "正在清理已删除的条目…",
         "added": added,
         "updated": updated,
-        "found": added + updated,
+        "found": total_found,
+        "processed": meta_total,
     })
 
     scan_root = str(scan_path)

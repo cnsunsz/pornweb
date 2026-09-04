@@ -51,6 +51,25 @@
             </el-form-item>
           </el-form>
         </el-card>
+
+        <el-card style="margin-top:16px">
+          <template #header><span class="ch">{{ t('dash.autoScan') }}</span></template>
+          <p class="sub-hint">{{ t('dash.autoScanHint') }}</p>
+          <el-form label-width="140px" style="max-width:560px">
+            <el-form-item :label="t('dash.autoScanEnabled')">
+              <el-switch v-model="form.auto_scan_enabled" />
+              <span class="note">{{ t('dash.autoScanEnabledHint') }}</span>
+            </el-form-item>
+            <el-form-item :label="t('dash.autoScanInterval')">
+              <el-input-number v-model="form.auto_scan_interval_minutes" :min="1" :max="1440" :step="5" controls-position="right" />
+              <span class="note">{{ t('dash.autoScanIntervalHint') }}</span>
+            </el-form-item>
+            <el-form-item>
+              <el-button type="primary" :loading="saving" @click="saveServer">{{ t('dash.save') }}</el-button>
+            </el-form-item>
+          </el-form>
+        </el-card>
+
         <el-alert v-if="restartHint" :title="t('dash.restartAlert')" type="warning" show-icon style="margin-top:16px" />
       </div>
 
@@ -211,6 +230,8 @@ const form = reactive({
   bind_host: '127.0.0.1',
   public_port: 5588,
   media_root: '',
+  auto_scan_enabled: true,
+  auto_scan_interval_minutes: 15,
   env_file: ''
 })
 
@@ -261,7 +282,9 @@ async function saveServer() {
       bind_host: form.bind_host,
       public_port: form.public_port,
       media_root: form.media_root,
-      app_name: form.app_name
+      app_name: form.app_name,
+      auto_scan_enabled: form.auto_scan_enabled,
+      auto_scan_interval_minutes: form.auto_scan_interval_minutes
     })
     Object.assign(form, res.data)
     restartHint.value = !!res.data.restart_required

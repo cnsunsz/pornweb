@@ -1,5 +1,17 @@
 # Changelog
 
+## v1.2.0
+### 新增
+- Emby / Jellyfin 风格**自动扫库**：启动时监视各媒体库目录（watchdog），文件系统事件防抖后触发增量扫描；rclone/FUSE 无可靠 inotify 时依赖**定时全库扫描**（默认 15 分钟，可配置）
+- 服务器设置页增加「自动扫库」开关与扫描间隔；写入 `.env`（`AUTO_SCAN_ENABLED` / `AUTO_SCAN_INTERVAL_MINUTES`），运行时可热更新
+- 扫库进度新增 `metadata` 阶段：UI 显示「正在读取元数据：标题 (3/120)」等文案（简中 / 繁中 / English / 日本語）
+
+### 修复·改进
+- NFO 解析改为**一次读入字节**（上限约 2MB）后在内存中尝试多编码，避免 rclone 上反复 `open`；相对海报/fanart 路径直接拼接，**不再**对 FUSE 路径做 `Path.exists()` 阻塞检查；优先使用 `defusedxml`
+- 扫库两阶段：先快速入库标题（discover），再元数据 enrichment（metadata）；进度回调节流（约 0.5s），减轻扫库时 DB 写入放大卡顿
+- 已有条目且 NFO 未变时可跳过重新解析（新增可选列 `nfo_mtime`）；已有 `file_size > 0` 的条目跳过昂贵的整片 `stat`；`stat` 失败不中断扫描
+- 依赖增加 `watchdog`
+
 ## v1.1.1
 ### 修复
 - 去掉错误的 Element Plus `manualChunks`（仅拆出 element-plus），修复控制台黑屏（`t is not a function`，Vue 无法挂载）

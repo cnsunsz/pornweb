@@ -11,7 +11,8 @@ from .deps import get_current_user, get_current_admin
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
 
-KEYS = ("HTTP_PORT", "BIND_HOST", "PUBLIC_PORT", "MEDIA_ROOT", "APP_NAME")
+KEYS = ("HTTP_PORT", "BIND_HOST", "PUBLIC_PORT", "MEDIA_ROOT", "APP_NAME",
+        "AUTO_SCAN_ENABLED", "AUTO_SCAN_INTERVAL_MINUTES")
 _BACKEND_ENV = Path("/www/mediavault/backend/.env")
 def _nginx_vhost() -> Path:
     d = Path("/www/server/panel/vhost/nginx")
@@ -37,6 +38,8 @@ class ServerSettings(BaseModel):
     bind_host: str = "127.0.0.1"
     public_port: int = Field(5588, ge=1, le=65535)
     media_root: str = ""
+    auto_scan_enabled: bool = True
+    auto_scan_interval_minutes: int = Field(15, ge=1, le=1440)
     env_file: str = ""
     restart_required: bool = False
 
@@ -47,6 +50,20 @@ class ServerSettingsUpdate(BaseModel):
     bind_host: Optional[str] = None
     public_port: Optional[int] = Field(None, ge=1, le=65535)
     media_root: Optional[str] = None
+    auto_scan_enabled: Optional[bool] = None
+    auto_scan_interval_minutes: Optional[int] = Field(None, ge=1, le=1440)
+
+
+
+def _env_bool(val, default=True) -> bool:
+    if val is None:
+        return default
+    s = str(val).strip().lower()
+    if s in ("1", "true", "yes", "on"):
+        return True
+    if s in ("0", "false", "no", "off"):
+        return False
+    return default
 
 
 def _read_env(path: Path) -> dict:
@@ -131,12 +148,24 @@ def _schedule_backend_restart():
 
 def _current() -> ServerSettings:
     env = _read_env(_ENV_PATH)
+    interval = env.get("AUTO_SCAN_INTERVAL_MINUTES")
+    try:
+        interval_i = int(interval) if interval not in (None, "") else int(
+            getattr(settings, "AUTO_SCAN_INTERVAL_MINUTES", 15) or 15
+        )
+    except (TypeError, ValueError):
+        interval_i = 15
     return ServerSettings(
         app_name=env.get("APP_NAME") or settings.APP_NAME,
         http_port=int(env.get("HTTP_PORT") or settings.HTTP_PORT),
         bind_host=env.get("BIND_HOST") or settings.BIND_HOST,
         public_port=int(env.get("PUBLIC_PORT") or settings.PUBLIC_PORT),
         media_root=env.get("MEDIA_ROOT") or settings.MEDIA_ROOT,
+        auto_scan_enabled=_env_bool(
+            env.get("AUTO_SCAN_ENABLED"),
+            bool(getattr(settings, "AUTO_SCAN_ENABLED", True)),
+        ),
+        auto_scan_interval_minutes=max(1, min(1440, interval_i)),
         env_file=str(_ENV_PATH),
         restart_required=False,
     )
@@ -184,8 +213,23 @@ async def update_settings(req: ServerSettingsUpdate, admin: User = Depends(get_c
             raise HTTPException(400, "媒体根目录不能为空")
         updates["MEDIA_ROOT"] = root
         cur.media_root = root
+    if req.auto_scan_enabled is not None:
+        updates["AUTO_SCAN_ENABLED"] = "true" if req.auto_scan_enabled else "false"
+        cur.auto_scan_enabled = req.auto_scan_enabled
+    if req.auto_scan_interval_minutes is not None:
+        updates["AUTO_SCAN_INTERVAL_MINUTES"] = str(req.auto_scan_interval_minutes)
+        cur.auto_scan_interval_minutes = req.auto_scan_interval_minutes
     if updates:
         _write_env_all(updates)
+        # Hot-apply auto-scan runtime without requiring restart
+        try:
+            from ..services.library_watcher import configure as _cfg_watcher
+            _cfg_watcher(
+                enabled=cur.auto_scan_enabled,
+                interval_minutes=cur.auto_scan_interval_minutes,
+            )
+        except Exception:
+            pass
     if restart:
         _apply_bind(cur.bind_host, cur.http_port)
         _schedule_backend_restart()

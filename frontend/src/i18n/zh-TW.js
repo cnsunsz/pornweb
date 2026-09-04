@@ -68,6 +68,12 @@ export default {
     saveFail: '儲存失敗', restartAlert: '已儲存。請重新啟動 PornWeb 服務使連接埠生效。',
     profile: '資料', role: '角色', admin: '管理員', user: '使用者', changePw: '修改密碼',
     oldPw: '原密碼', newPw: '新密碼', pwOk: '密碼已修改', pwFail: '修改失敗', oldPwReq: '請輸入原密碼',
+    autoScan: '自動掃庫',
+    autoScanHint: '類似 Emby / Jellyfin：監聽媒體庫目錄變化，並定時全庫掃描（rclone FUSE 主要依賴定時掃描）。',
+    autoScanEnabled: '啟用自動掃描',
+    autoScanEnabledHint: '關閉後僅可手動掃描',
+    autoScanInterval: '定時掃描間隔（分鐘）',
+    autoScanIntervalHint: '預設 15 分鐘；FUSE 上建議不要過短',
     language: '顯示語言', languageHint: '預設跟隨瀏覽器語言',
   },
   lib: {
@@ -87,6 +93,11 @@ export default {
     scanAdded: '新增 {n}',
     scanUpdated: '更新 {n}',
     scanRemoved: '清理 {n}',
+    phaseDiscover: '發現檔案',
+    phaseMetadata: '讀取元資料',
+    phaseCleanup: '清理已刪除',
+    phaseDone: '完成',
+
   },
   users: {
     title: '使用者管理', add: '新增使用者', edit: '編輯使用者', user: '使用者', role: '角色',
