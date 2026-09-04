@@ -3,12 +3,14 @@
     ref="playerEl"
     class="player"
     :class="{ fullscreen: isFullscreen, 'controls-visible': controlsVisible, paused: isPaused }"
-    @mousemove="showControls"
-    @mouseleave="hideControlsDelayed"
-    @click="togglePlay"
-    @dblclick="toggleFullscreen"
+    @mousemove="onSurfaceMove"
+    @mouseleave="onSurfaceLeave"
+    @mousedown="onSurfaceDown"
+    @mouseup="onSurfaceUp"
+    @touchstart.passive="onTouchStart"
+    @touchend="onTouchEnd"
+    @touchmove.passive="onTouchMove"
   >
-    <!-- Video -->
     <video
       ref="videoEl"
       :src="src"
@@ -24,27 +26,31 @@
       @error="onError"
     />
 
-    <!-- Buffering spinner -->
     <div v-if="isBuffering" class="buffering">
       <div class="spinner"></div>
     </div>
 
-    <!-- Center play button (when paused) -->
-    <div v-if="isPaused && !isBuffering" class="center-play">
+    <div v-if="isPaused && !isBuffering" class="center-play" @click.stop="togglePlay">
       <svg viewBox="0 0 24 24" width="72" height="72"><path d="M8 5v14l11-7z" fill="white"/></svg>
     </div>
 
-    <!-- Top bar: title + back -->
+    <!-- Gesture feedback (double-tap / swipe / long-press) -->
+    <div v-if="gestureHint" class="gesture-hint">{{ gestureHint }}</div>
+    <div v-if="speedBoosting" class="speed-badge">{{ prefs.longPressSpeed }}x</div>
+
     <div class="top-bar" @click.stop>
       <button class="icon-btn" @click="$emit('close')" :title="t('player.back')">
         <svg viewBox="0 0 24 24" width="24" height="24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z" fill="white"/></svg>
       </button>
       <span class="title">{{ title }}</span>
+      <div class="top-right">
+        <button class="icon-btn" @click="openPlaybackSettings" :title="t('playback.title')">
+          <svg viewBox="0 0 24 24" width="22" height="22"><path d="M19.14 12.94c.04-.31.06-.63.06-.94s-.02-.63-.06-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.49.49 0 0 0-.59-.22l-2.39.96a7.05 7.05 0 0 0-1.62-.94l-.36-2.54A.49.49 0 0 0 13.9 2h-3.8a.49.49 0 0 0-.48.41l-.36 2.54c-.59.24-1.13.55-1.62.94l-2.39-.96a.49.49 0 0 0-.59.22L2.74 8.87a.48.48 0 0 0 .12.61l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94L2.86 14.53a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.39.3.59.22l2.39-.96c.5.39 1.04.71 1.62.94l.36 2.54c.05.24.24.41.48.41h3.8c.24 0 .44-.17.48-.41l.36-2.54c.59-.24 1.13-.55 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32a.49.49 0 0 0-.12-.61l-2.01-1.58zM12 15.6A3.6 3.6 0 1 1 12 8.4a3.6 3.6 0 0 1 0 7.2z" fill="white"/></svg>
+        </button>
+      </div>
     </div>
 
-    <!-- Bottom controls -->
     <div class="bottom-bar" @click.stop>
-      <!-- Progress bar -->
       <div
         class="progress-container"
         ref="progressEl"
@@ -58,32 +64,26 @@
             <div class="progress-thumb"></div>
           </div>
         </div>
-        <!-- Hover time tooltip -->
         <div v-if="hoverTime !== null" class="hover-tooltip" :style="{ left: hoverX + 'px' }">
           {{ formatTime(hoverTime) }}
         </div>
       </div>
 
-      <!-- Control buttons -->
       <div class="controls-row">
         <div class="controls-left">
-          <!-- Play/Pause -->
           <button class="icon-btn" @click.stop="togglePlay" :title="isPaused ? t('player.play') : t('player.pause')">
             <svg v-if="isPaused" viewBox="0 0 24 24" width="28" height="28"><path d="M8 5v14l11-7z" fill="white"/></svg>
             <svg v-else viewBox="0 0 24 24" width="28" height="28"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" fill="white"/></svg>
           </button>
 
-          <!-- Skip backward -->
-          <button class="icon-btn" @click.stop="skip(-10)" :title="t('player.back10')">
-            <svg viewBox="0 0 24 24" width="22" height="22"><path d="M11.99 5V1l-5 5 5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6h-2c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z" fill="white"/><text x="9" y="16" font-size="7" fill="white" font-weight="bold">10</text></svg>
+          <button class="icon-btn" @click.stop="skip(-prefs.skipSeconds)" :title="t('player.backN', { n: prefs.skipSeconds })">
+            <svg viewBox="0 0 24 24" width="22" height="22"><path d="M11.99 5V1l-5 5 5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6h-2c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z" fill="white"/><text x="7.5" y="16" font-size="6.5" fill="white" font-weight="bold">{{ prefs.skipSeconds }}</text></svg>
           </button>
 
-          <!-- Skip forward -->
-          <button class="icon-btn" @click.stop="skip(10)" :title="t('player.fwd10')">
-            <svg viewBox="0 0 24 24" width="22" height="22"><path d="M12.01 5V1l5 5-5 5V7c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6h2c0 4.42-3.58 8-8 8s-8-3.58-8-8 3.58-8 8-8z" fill="white"/><text x="9" y="16" font-size="7" fill="white" font-weight="bold">10</text></svg>
+          <button class="icon-btn" @click.stop="skip(prefs.skipSeconds)" :title="t('player.fwdN', { n: prefs.skipSeconds })">
+            <svg viewBox="0 0 24 24" width="22" height="22"><path d="M12.01 5V1l5 5-5 5V7c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6h2c0 4.42-3.58 8-8 8s-8-3.58-8-8 3.58-8 8-8z" fill="white"/><text x="7.5" y="16" font-size="6.5" fill="white" font-weight="bold">{{ prefs.skipSeconds }}</text></svg>
           </button>
 
-          <!-- Volume -->
           <div class="volume-group" @click.stop>
             <button class="icon-btn" @click="toggleMute" :title="isMuted ? t('player.unmute') : t('player.mute')">
               <svg v-if="isMuted || volume === 0" viewBox="0 0 24 24" width="22" height="22"><path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z" fill="white"/></svg>
@@ -98,14 +98,12 @@
             </div>
           </div>
 
-          <!-- Time -->
           <span class="time-display">
             {{ formatTime(currentTime) }} / {{ formatTime(duration) }}
           </span>
         </div>
 
         <div class="controls-right">
-          <!-- Parts -->
           <div v-if="parts && parts.length > 1" class="parts-group" @click.stop>
             <button
               v-for="(p, i) in parts"
@@ -116,19 +114,16 @@
             >{{ p.label || (i+1) }}</button>
           </div>
 
-          <!-- Playback speed -->
           <div class="speed-group" @click.stop>
             <button class="icon-btn speed-btn" @click="cycleSpeed">
               {{ playbackRate }}x
             </button>
           </div>
 
-          <!-- Picture in Picture -->
           <button class="icon-btn" @click.stop="togglePiP" :title="t('player.pip')">
             <svg viewBox="0 0 24 24" width="22" height="22"><path d="M19 11h-8v6h8v-6zm4 8V4.98C23 3.88 22.1 3 21 3H3c-1.1 0-2 .88-2 1.98V19c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2zm-2 .02H3V4.97h18v14.05z" fill="white"/></svg>
           </button>
 
-          <!-- Fullscreen -->
           <button class="icon-btn" @click.stop="toggleFullscreen" :title="isFullscreen ? t('player.exitFs') : t('player.fs')">
             <svg v-if="!isFullscreen" viewBox="0 0 24 24" width="22" height="22"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z" fill="white"/></svg>
             <svg v-else viewBox="0 0 24 24" width="22" height="22"><path d="M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-11V5h-2v5h5V8h-3z" fill="white"/></svg>
@@ -142,9 +137,14 @@
 <script setup>
 import { ref, onMounted, onUnmounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRouter } from 'vue-router'
 import { saveProgress } from '@/api/media'
+import { usePlayerPrefs } from '@/composables/usePlayerPrefs'
 
 const { t } = useI18n()
+const router = useRouter()
+const prefs = usePlayerPrefs()
+
 const props = defineProps({
   src: { type: String, required: true },
   title: { type: String, default: '' },
@@ -172,12 +172,26 @@ const playbackRate = ref(1)
 const controlsVisible = ref(true)
 const hoverTime = ref(null)
 const hoverX = ref(0)
+const gestureHint = ref('')
+const speedBoosting = ref(false)
 
 let controlsTimer = null
 let seeking = false
 let lastSave = 0
+let baseRate = 1
+let spaceHeld = false
+let longPressTimer = null
+let longPressActive = false
+let longPressSide = null
+let rewindTimer = null
+let lastTap = { t: 0, x: 0 }
+let dragSeek = null // { startX, startTime, width }
+let hintTimer = null
+let suppressClickUntil = 0
+let pointerDownAt = null
 
-// Controls visibility
+const SPEEDS = [0.75, 1, 1.25, 1.5, 2]
+
 function showControls() {
   controlsVisible.value = true
   clearTimeout(controlsTimer)
@@ -192,21 +206,25 @@ function hideControlsDelayed() {
   }, 1500)
 }
 
-// Play/Pause
+function flashHint(text) {
+  gestureHint.value = text
+  clearTimeout(hintTimer)
+  hintTimer = setTimeout(() => { gestureHint.value = '' }, 900)
+}
+
 function togglePlay() {
+  if (Date.now() < suppressClickUntil) return
   if (!videoEl.value) return
   if (videoEl.value.paused) videoEl.value.play()
   else videoEl.value.pause()
 }
 
-// Seek
 function skip(sec) {
   if (!videoEl.value) return
   videoEl.value.currentTime = Math.max(0, Math.min(duration.value, videoEl.value.currentTime + sec))
   showControls()
 }
 
-// Volume
 function setVolume(v) {
   if (!videoEl.value) return
   videoEl.value.volume = parseFloat(v)
@@ -220,34 +238,40 @@ function toggleMute() {
   videoEl.value.muted = isMuted.value
 }
 
-// Speed
-function cycleSpeed() {
-  const speeds = [0.5, 0.75, 1, 1.25, 1.5, 2]
-  const idx = speeds.indexOf(playbackRate.value)
-  playbackRate.value = speeds[(idx + 1) % speeds.length]
-  if (videoEl.value) videoEl.value.playbackRate = playbackRate.value
+function applyRate(rate) {
+  playbackRate.value = rate
+  if (videoEl.value) videoEl.value.playbackRate = rate
 }
 
-// Fullscreen
+function cycleSpeed() {
+  const idx = SPEEDS.indexOf(playbackRate.value)
+  const next = SPEEDS[(idx + 1) % SPEEDS.length]
+  baseRate = next
+  applyRate(next)
+}
+
 function toggleFullscreen() {
   if (!playerEl.value) return
   if (!document.fullscreenElement) {
-    playerEl.value.requestFullscreen()
+    playerEl.value.requestFullscreen?.() || playerEl.value.webkitRequestFullscreen?.()
     isFullscreen.value = true
   } else {
-    document.exitFullscreen()
+    document.exitFullscreen?.()
     isFullscreen.value = false
   }
 }
 
-// PiP
 function togglePiP() {
   if (!videoEl.value) return
   if (document.pictureInPictureElement) document.exitPictureInPicture()
   else videoEl.value.requestPictureInPicture()
 }
 
-// Progress seeking
+function openPlaybackSettings() {
+  emit('close')
+  router.push({ path: '/settings', query: { tab: 'playback' } })
+}
+
 function startSeek(e) {
   seeking = true
   seekTo(e)
@@ -274,26 +298,35 @@ function onProgressHover(e) {
   hoverX.value = e.clientX - rect.left
 }
 
-// Video events
 function onLoaded() {
   duration.value = videoEl.value.duration
-  // Restore position
-  const saved = getSavedPosition()
-  if (saved > 0) videoEl.value.currentTime = saved
-  // Restore volume
+  baseRate = prefs.defaultSpeed
+  applyRate(prefs.defaultSpeed)
+  // Honor Android-style resume toggle; still apply saved volume.
+  if (prefs.resumeOnOpen) {
+    const saved = getSavedPosition()
+    if (saved > 0 && saved < (duration.value || Infinity) - 3) {
+      videoEl.value.currentTime = saved
+    }
+  }
   const savedVol = localStorage.getItem('mv_volume')
   if (savedVol !== null) setVolume(parseFloat(savedVol))
+  videoEl.value.play().catch(() => {})
+  if (prefs.autoFullscreen && !document.fullscreenElement) {
+    // Browser may require a user gesture; try once after metadata.
+    setTimeout(() => {
+      try { toggleFullscreen() } catch {}
+    }, 50)
+  }
 }
 function onTimeUpdate() {
   if (!videoEl.value || seeking) return
   currentTime.value = videoEl.value.currentTime
   duration.value = videoEl.value.duration || 0
   playedPercent.value = duration.value ? (currentTime.value / duration.value) * 100 : 0
-  // Buffered
   if (videoEl.value.buffered.length > 0) {
     bufferedPercent.value = (videoEl.value.buffered.end(videoEl.value.buffered.length - 1) / duration.value) * 100
   }
-  // Save position periodically
   savePosition()
 }
 function onVolumeChange() {
@@ -310,7 +343,6 @@ function onError() {
   isBuffering.value = false
 }
 
-// Position save/restore
 function getStorageKey() { return props.mediaId ? `mv_pos_${props.mediaId}` : '' }
 function savePosition() {
   const key = getStorageKey()
@@ -337,23 +369,237 @@ function clearSavedPosition() {
   if (key) localStorage.removeItem(key)
 }
 
-// Keyboard shortcuts
-function onKeydown(e) {
-  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return
-  switch (e.key) {
-    case ' ': e.preventDefault(); togglePlay(); break
-    case 'ArrowLeft': e.preventDefault(); skip(-10); break
-    case 'ArrowRight': e.preventDefault(); skip(10); break
-    case 'ArrowUp': e.preventDefault(); setVolume(Math.min(1, volume.value + 0.1)); break
-    case 'ArrowDown': e.preventDefault(); setVolume(Math.max(0, volume.value - 0.1)); break
-    case 'f': case 'F': e.preventDefault(); toggleFullscreen(); break
-    case 'm': case 'M': e.preventDefault(); toggleMute(); break
-    case 'Escape': if (isFullscreen.value) toggleFullscreen(); else emit('close'); break
+/** Skip shortcuts when focus is in form fields or Element Plus overlays. */
+function isTypingTarget(el) {
+  if (!el || el === document.body) return false
+  const tag = (el.tagName || '').toLowerCase()
+  if (tag === 'input' || tag === 'textarea' || tag === 'select') return true
+  if (el.isContentEditable) return true
+  if (el.closest?.('.el-dialog, .el-message-box, .el-overlay, .el-select-dropdown, .el-picker-panel')) return true
+  return false
+}
+
+function beginSpeedBoost() {
+  if (!videoEl.value || speedBoosting.value) return
+  speedBoosting.value = true
+  applyRate(prefs.longPressSpeed)
+  if (videoEl.value.paused) videoEl.value.play().catch(() => {})
+}
+function endSpeedBoost() {
+  if (!speedBoosting.value) return
+  speedBoosting.value = false
+  applyRate(baseRate)
+}
+function beginRewind() {
+  if (rewindTimer) return
+  // HTML video cannot play negative rate; tick seek-back while held.
+  rewindTimer = setInterval(() => {
+    skip(-Math.max(1, prefs.skipSeconds / 2))
+  }, 200)
+  flashHint(`« ${prefs.skipSeconds}s`)
+}
+function endRewind() {
+  if (rewindTimer) {
+    clearInterval(rewindTimer)
+    rewindTimer = null
   }
+}
+
+function onKeydown(e) {
+  if (isTypingTarget(e.target)) return
+  const key = e.key
+  if (key === ' ' || key === 'Spacebar') {
+    e.preventDefault()
+    if (!spaceHeld) {
+      spaceHeld = true
+      // Hold Space → temporary long-press speed; short tap still toggles play on keyup.
+      longPressTimer = setTimeout(() => {
+        beginSpeedBoost()
+      }, 280)
+    }
+    return
+  }
+  switch (key) {
+    case 'ArrowLeft':
+      e.preventDefault()
+      skip(-prefs.skipSeconds)
+      flashHint(`- ${prefs.skipSeconds}s`)
+      break
+    case 'ArrowRight':
+      e.preventDefault()
+      skip(prefs.skipSeconds)
+      flashHint(`+ ${prefs.skipSeconds}s`)
+      break
+    case 'ArrowUp':
+      e.preventDefault()
+      setVolume(Math.min(1, volume.value + 0.1))
+      break
+    case 'ArrowDown':
+      e.preventDefault()
+      setVolume(Math.max(0, volume.value - 0.1))
+      break
+    case 'f': case 'F':
+      e.preventDefault()
+      toggleFullscreen()
+      break
+    case 'm': case 'M':
+      e.preventDefault()
+      toggleMute()
+      break
+    case 'Escape':
+      if (isFullscreen.value) toggleFullscreen()
+      else emit('close')
+      break
+  }
+}
+
+function onKeyup(e) {
+  if (e.key !== ' ' && e.key !== 'Spacebar') return
+  if (!spaceHeld) return
+  spaceHeld = false
+  clearTimeout(longPressTimer)
+  longPressTimer = null
+  if (speedBoosting.value) {
+    endSpeedBoost()
+  } else {
+    togglePlay()
+  }
+}
+
+function clientXY(e) {
+  if (e.touches && e.touches[0]) return { x: e.touches[0].clientX, y: e.touches[0].clientY }
+  if (e.changedTouches && e.changedTouches[0]) return { x: e.changedTouches[0].clientX, y: e.changedTouches[0].clientY }
+  return { x: e.clientX, y: e.clientY }
+}
+
+function sideFromX(x) {
+  const rect = playerEl.value?.getBoundingClientRect()
+  if (!rect) return 'right'
+  return (x - rect.left) < rect.width / 2 ? 'left' : 'right'
+}
+
+function handleDoubleTap(x) {
+  if (!prefs.doubleTapSeek) {
+    toggleFullscreen()
+    return
+  }
+  const side = sideFromX(x)
+  const sec = prefs.skipSeconds
+  if (side === 'left') {
+    skip(-sec)
+    flashHint(`- ${sec}s`)
+  } else {
+    skip(sec)
+    flashHint(`+ ${sec}s`)
+  }
+  suppressClickUntil = Date.now() + 350
+}
+
+function onSurfaceDown(e) {
+  if (e.button != null && e.button !== 0) return
+  if (e.target.closest?.('.top-bar, .bottom-bar, .icon-btn, .progress-container, .center-play')) return
+  const { x } = clientXY(e)
+  pointerDownAt = { x, t: Date.now() }
+  longPressSide = sideFromX(x)
+  longPressActive = false
+  clearTimeout(longPressTimer)
+  longPressTimer = setTimeout(() => {
+    longPressActive = true
+    if (longPressSide === 'left' && prefs.leftLongPressRewind) beginRewind()
+    else beginSpeedBoost()
+  }, 400)
+  // Horizontal drag seek: full width ≈ swipeSeekSeconds
+  dragSeek = {
+    startX: x,
+    startTime: videoEl.value?.currentTime || 0,
+    width: playerEl.value?.getBoundingClientRect().width || 1,
+    moved: false,
+  }
+  showControls()
+}
+
+function onSurfaceMove(e) {
+  showControls()
+  if (!dragSeek || !videoEl.value) return
+  if (longPressActive) return
+  const { x } = clientXY(e)
+  const dx = x - dragSeek.startX
+  if (Math.abs(dx) < 8) return
+  dragSeek.moved = true
+  clearTimeout(longPressTimer)
+  // pct of width * configured full-width seconds
+  const delta = (dx / dragSeek.width) * prefs.swipeSeekSeconds
+  const target = Math.max(0, Math.min(duration.value, dragSeek.startTime + delta))
+  videoEl.value.currentTime = target
+  flashHint(`${delta >= 0 ? '+' : ''}${Math.round(delta)}s`)
+}
+
+function onSurfaceLeave() {
+  hideControlsDelayed()
+}
+
+function finishPointer(e) {
+  clearTimeout(longPressTimer)
+  longPressTimer = null
+  if (longPressActive) {
+    endSpeedBoost()
+    endRewind()
+    longPressActive = false
+    suppressClickUntil = Date.now() + 300
+    dragSeek = null
+    pointerDownAt = null
+    return
+  }
+  const { x } = clientXY(e)
+  const moved = dragSeek?.moved
+  dragSeek = null
+  if (moved) {
+    suppressClickUntil = Date.now() + 300
+    pointerDownAt = null
+    return
+  }
+  const now = Date.now()
+  if (now - lastTap.t < 320 && Math.abs(x - lastTap.x) < 40) {
+    handleDoubleTap(x)
+    lastTap = { t: 0, x: 0 }
+    pointerDownAt = null
+    return
+  }
+  lastTap = { t: now, x }
+  // Single tap → play/pause (after short delay so double-tap can cancel)
+  setTimeout(() => {
+    if (Date.now() - lastTap.t >= 300 && lastTap.t) {
+      togglePlay()
+      lastTap = { t: 0, x: 0 }
+    }
+  }, 300)
+  pointerDownAt = null
+}
+
+function onSurfaceUp(e) {
+  if (e.target.closest?.('.top-bar, .bottom-bar, .icon-btn, .progress-container')) {
+    clearTimeout(longPressTimer)
+    endSpeedBoost()
+    endRewind()
+    dragSeek = null
+    return
+  }
+  finishPointer(e)
+}
+
+function onTouchStart(e) {
+  if (e.target.closest?.('.top-bar, .bottom-bar, .icon-btn, .progress-container')) return
+  onSurfaceDown(e)
+}
+function onTouchMove(e) { onSurfaceMove(e) }
+function onTouchEnd(e) {
+  if (e.target.closest?.('.top-bar, .bottom-bar, .icon-btn, .progress-container')) return
+  finishPointer(e)
 }
 
 onMounted(() => {
   document.addEventListener('keydown', onKeydown)
+  document.addEventListener('keyup', onKeyup)
   document.addEventListener('fullscreenchange', () => {
     isFullscreen.value = !!document.fullscreenElement
   })
@@ -361,7 +607,11 @@ onMounted(() => {
 })
 onUnmounted(() => {
   document.removeEventListener('keydown', onKeydown)
+  document.removeEventListener('keyup', onKeyup)
   clearTimeout(controlsTimer)
+  clearTimeout(longPressTimer)
+  clearTimeout(hintTimer)
+  endRewind()
   if (props.mediaId && currentTime.value > 5) {
     saveProgress(props.mediaId, {
       position: currentTime.value,
@@ -379,6 +629,13 @@ watch(() => props.src, () => {
   if (videoEl.value) {
     videoEl.value.load()
     videoEl.value.play().catch(() => {})
+  }
+})
+
+watch(() => prefs.defaultSpeed, (v) => {
+  if (!speedBoosting.value) {
+    baseRate = v
+    applyRate(v)
   }
 })
 
@@ -400,10 +657,9 @@ function formatTime(s) {
 }
 .player.controls-visible { cursor: default; }
 .player video {
-  width: 100%; height: 100%; object-fit: contain;
+  width: 100%; height: 100%; object-fit: contain; pointer-events: none;
 }
 
-/* Buffering */
 .buffering {
   position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
   pointer-events: none;
@@ -415,35 +671,43 @@ function formatTime(s) {
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-/* Center play */
 .center-play {
   position: absolute; display: flex; align-items: center; justify-content: center;
-  pointer-events: none; opacity: 0.7; transition: opacity 0.2s;
+  opacity: 0.7; transition: opacity 0.2s; cursor: pointer; z-index: 2;
 }
 .player:not(.paused) .center-play { display: none; }
 
-/* Top bar */
+.gesture-hint {
+  position: absolute; top: 22%; left: 50%; transform: translateX(-50%);
+  background: rgba(0,0,0,.7); color: #fff; padding: 8px 16px; border-radius: 8px;
+  font-size: 18px; font-weight: 600; pointer-events: none; z-index: 5;
+}
+.speed-badge {
+  position: absolute; top: 18%; right: 8%;
+  background: rgba(229,9,20,.85); color: #fff; padding: 6px 12px; border-radius: 6px;
+  font-size: 16px; font-weight: 700; pointer-events: none; z-index: 5;
+}
+
 .top-bar {
   position: absolute; top: 0; left: 0; right: 0;
   padding: 16px 20px; display: flex; align-items: center; gap: 12px;
   background: linear-gradient(to bottom, rgba(0,0,0,0.7) 0%, transparent 100%);
   transition: opacity 0.3s;
-  opacity: 0; pointer-events: none;
+  opacity: 0; pointer-events: none; z-index: 3;
 }
 .player.controls-visible .top-bar { opacity: 1; pointer-events: auto; }
-.title { font-size: 16px; font-weight: 500; color: #fff; }
+.title { font-size: 16px; font-weight: 500; color: #fff; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.top-right { display: flex; align-items: center; gap: 4px; }
 
-/* Bottom bar */
 .bottom-bar {
   position: absolute; bottom: 0; left: 0; right: 0;
   padding: 0 16px 12px;
   background: linear-gradient(to top, rgba(0,0,0,0.8) 0%, transparent 100%);
   transition: opacity 0.3s;
-  opacity: 0; pointer-events: none;
+  opacity: 0; pointer-events: none; z-index: 3;
 }
 .player.controls-visible .bottom-bar { opacity: 1; pointer-events: auto; }
 
-/* Progress */
 .progress-container {
   position: relative; width: 100%; height: 20px;
   display: flex; align-items: center; cursor: pointer;
@@ -473,22 +737,20 @@ function formatTime(s) {
   border-radius: 4px; font-size: 12px; white-space: nowrap; pointer-events: none;
 }
 
-/* Controls row */
 .controls-row {
   display: flex; align-items: center; justify-content: space-between;
   margin-top: 8px;
 }
 .controls-left, .controls-right { display: flex; align-items: center; gap: 4px; }
 
-/* Icon button */
 .icon-btn {
   background: none; border: none; padding: 6px; cursor: pointer;
   display: flex; align-items: center; justify-content: center;
   border-radius: 4px; transition: background 0.15s;
 }
 .icon-btn:hover { background: rgba(255,255,255,0.15); }
+.icon-btn.active { color: #e50914; }
 
-/* Volume */
 .volume-group { display: flex; align-items: center; gap: 2px; }
 .volume-slider-wrap { width: 0; overflow: hidden; transition: width 0.2s; }
 .volume-group:hover .volume-slider-wrap { width: 80px; }
@@ -501,13 +763,11 @@ function formatTime(s) {
   background: #fff; border-radius: 50%; cursor: pointer;
 }
 
-/* Time */
 .time-display {
   color: rgba(255,255,255,0.8); font-size: 13px; margin-left: 8px;
   font-variant-numeric: tabular-nums;
 }
 
-/* Speed */
 .speed-btn {
   color: rgba(255,255,255,0.8); font-size: 13px; font-weight: 600;
   padding: 4px 8px; min-width: 40px;

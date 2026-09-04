@@ -2,6 +2,28 @@
   <div class="admin">
     <h2>{{ t('lib.title') }}</h2>
 
+    <!-- Sticky compact progress strip while any library is scanning -->
+    <div v-if="stickyScan" class="scan-sticky">
+      <div class="scan-sticky-head">
+        <span class="scan-sticky-title">{{ stickyScan.name || t('lib.scanning') }}</span>
+        <span class="scan-sticky-pct" v-if="scanPercent(stickyScan.status) != null">{{ scanPercent(stickyScan.status) }}%</span>
+      </div>
+      <el-progress
+        :percentage="scanPercent(stickyScan.status) ?? 0"
+        :indeterminate="scanPercent(stickyScan.status) == null"
+        :stroke-width="8"
+        :show-text="false"
+        striped
+        striped-flow
+        status="success"
+      />
+      <div class="scan-meta">
+        <span v-if="stickyScan.status.phase || stickyScan.status.message">{{ stickyScan.status.phase || stickyScan.status.message }}</span>
+        <span v-if="stickyScan.status.current" class="scan-current">{{ stickyScan.status.current }}</span>
+        <span class="scan-counts">{{ formatCounts(stickyScan.status) }}</span>
+      </div>
+    </div>
+
     <el-card>
       <template #header><span class="ch">{{ t('lib.add') }}</span></template>
       <div class="add-form">
@@ -12,27 +34,50 @@
         <el-select v-model="libType" size="large" style="width:100px">
           <el-option :label="t('home.movie')" value="movie" /><el-option :label="t('home.show')" value="tvshow" /><el-option :label="t('lib.mixed')" value="mixed" />
         </el-select>
-        <el-button type="primary" size="large" :loading="scanning" @click="doScan">{{ t('lib.scan') }}</el-button>
+        <el-button type="primary" size="large" :loading="scanning" :disabled="scanning" @click="doScan">{{ t('lib.scan') }}</el-button>
       </div>
-      <el-alert v-if="scanResult" :title="scanText" :type="scanAlertType" show-icon style="margin-top:12px" @close="scanResult=null" />
+      <el-alert v-if="scanResult && !isRunningStatus(scanResult)" :title="scanText" :type="scanAlertType" show-icon style="margin-top:12px" @close="scanResult=null" />
     </el-card>
 
     <el-card v-if="libs.length">
       <template #header><span class="ch">{{ t('lib.libraries') }}</span></template>
       <div class="lib-list">
-        <div v-for="lib in libs" :key="lib.id || lib.path" class="lib-item">
-          <div class="lib-info">
-            <svg viewBox="0 0 24 24" width="20" height="20"><path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z" fill="var(--accent)"/></svg>
-            <div>
-              <div class="lib-name">{{ lib.name }}</div>
-              <div class="lib-path">{{ lib.path }} · {{ lib.count || 0 }} 项{{ lib.scan_status === 'running' ? ' · 扫描中' : '' }}</div>
+        <div v-for="lib in libs" :key="lib.id || lib.path" class="lib-item" :class="{ scanning: isLibScanning(lib) }">
+          <div class="lib-main">
+            <div class="lib-info">
+              <svg viewBox="0 0 24 24" width="20" height="20"><path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z" fill="var(--accent)"/></svg>
+              <div class="lib-text">
+                <div class="lib-name">{{ lib.name }}</div>
+                <div class="lib-path">{{ lib.path }} · {{ lib.count || 0 }} {{ t('lib.itemsShort') }}{{ isLibScanning(lib) ? ' · ' + t('lib.scanning') : '' }}</div>
+              </div>
+            </div>
+            <div class="lib-acts">
+              <el-tag :type="lib.type==='movie'?'primary':'warning'" size="small">{{ lib.type==='movie'?t('home.movie'):lib.type==='tvshow'?t('home.show'):t('lib.mixed') }}</el-tag>
+              <el-button size="small" @click="renameLib(lib)" :disabled="isLibScanning(lib)">{{ t('lib.rename') }}</el-button>
+              <el-button size="small" @click="rescan(lib)" :loading="!!lib._sc || isLibScanning(lib)" :disabled="isLibScanning(lib)">{{ t('lib.rescan') }}</el-button>
+              <el-button size="small" type="danger" text @click="removeLib(lib)" :disabled="isLibScanning(lib)">{{ t('lib.remove') }}</el-button>
             </div>
           </div>
-          <div class="lib-acts">
-            <el-tag :type="lib.type==='movie'?'primary':'warning'" size="small">{{ lib.type==='movie'?t('home.movie'):lib.type==='tvshow'?t('home.show'):t('lib.mixed') }}</el-tag>
-            <el-button size="small" @click="renameLib(lib)">{{ t('lib.rename') }}</el-button>
-            <el-button size="small" @click="rescan(lib)" :loading="lib._sc">{{ t('lib.rescan') }}</el-button>
-            <el-button size="small" type="danger" text @click="removeLib(lib)">{{ t('lib.remove') }}</el-button>
+
+          <!-- Per-library Emby/Jellyfin-style scan progress -->
+          <div v-if="statusFor(lib)" class="lib-scan">
+            <div class="lib-scan-row">
+              <span class="lib-scan-phase">{{ statusFor(lib).phase || statusFor(lib).message || t('lib.scanning') }}</span>
+              <span v-if="scanPercent(statusFor(lib)) != null" class="lib-scan-pct">{{ scanPercent(statusFor(lib)) }}%</span>
+            </div>
+            <el-progress
+              :percentage="scanPercent(statusFor(lib)) ?? (isRunningStatus(statusFor(lib)) ? 100 : 0)"
+              :indeterminate="isRunningStatus(statusFor(lib)) && scanPercent(statusFor(lib)) == null"
+              :stroke-width="10"
+              :show-text="false"
+              striped
+              :striped-flow="isRunningStatus(statusFor(lib))"
+              :status="statusFor(lib).status === 'error' ? 'exception' : (statusFor(lib).status === 'done' ? 'success' : undefined)"
+            />
+            <div class="scan-meta">
+              <span v-if="statusFor(lib).current" class="scan-current">{{ statusFor(lib).current }}</span>
+              <span class="scan-counts">{{ formatCounts(statusFor(lib)) }}</span>
+            </div>
           </div>
         </div>
       </div>
@@ -70,7 +115,7 @@
   </div>
 </template>
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, reactive, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMediaStore } from '@/stores/media'
 import { scanMedia, deleteMedia, getPosterUrl, getLibraries, createLibrary, deleteLibrary, scanLibrary, updateLibrary, getScanStatus } from '@/api/media'
@@ -80,6 +125,10 @@ const store = useMediaStore()
 const libs = ref([])
 const libPath = ref(''); const libName = ref(''); const libType = ref('movie')
 const scanning = ref(false); const scanResult = ref(null); const pg = ref(1)
+/** @type {import('vue').Reactive<Record<string|number, object>>} */
+const scanByLib = reactive({})
+const polling = new Set()
+
 const scanText = computed(() => {
   if (scanResult.value?.error) return scanResult.value.error
   if (scanResult.value?.message) return scanResult.value.message
@@ -90,7 +139,59 @@ const scanAlertType = computed(() => {
   if (scanResult.value?.status === 'running') return 'info'
   return 'success'
 })
+
+const stickyScan = computed(() => {
+  for (const lib of libs.value || []) {
+    const st = statusFor(lib)
+    if (st && isRunningStatus(st)) return { name: lib.name, status: st }
+  }
+  for (const [id, st] of Object.entries(scanByLib)) {
+    if (isRunningStatus(st)) {
+      const lib = (libs.value || []).find(l => String(l.id) === String(id))
+      return { name: lib?.name || t('lib.scanning'), status: st }
+    }
+  }
+  return null
+})
+
 function posterUrl(id) { return getPosterUrl(id) }
+
+function isRunningStatus(st) {
+  return st && st.status === 'running'
+}
+
+function statusFor(lib) {
+  if (!lib) return null
+  const key = lib.id != null ? lib.id : lib.path
+  return scanByLib[key] || null
+}
+
+function isLibScanning(lib) {
+  if (lib?.scan_status === 'running') return true
+  const st = statusFor(lib)
+  return isRunningStatus(st) || !!lib?._sc
+}
+
+/** Determinate % from processed/found (or current numeric), else null → indeterminate. */
+function scanPercent(st) {
+  if (!st) return null
+  const found = Number(st.found) || 0
+  const processed = Number(st.processed) || 0
+  if (found > 0) return Math.min(100, Math.round((processed / found) * 100))
+  if (st.status === 'done') return 100
+  return null
+}
+
+function formatCounts(st) {
+  if (!st) return ''
+  const parts = []
+  if (st.found != null) parts.push(t('lib.scanFound', { n: st.found }))
+  if (st.processed != null) parts.push(t('lib.scanProcessed', { n: st.processed }))
+  if (st.added != null) parts.push(t('lib.scanAdded', { n: st.added }))
+  if (st.updated != null) parts.push(t('lib.scanUpdated', { n: st.updated }))
+  if (st.removed != null) parts.push(t('lib.scanRemoved', { n: st.removed }))
+  return parts.join(' · ')
+}
 
 async function loadLibs() {
   try {
@@ -113,25 +214,41 @@ async function migrateLocal() {
   await loadLibs()
 }
 
+function setScanStatus(libId, data) {
+  if (libId == null) return
+  scanByLib[libId] = data
+  scanResult.value = data
+}
+
 async function pollScan(libId, after) {
-  scanResult.value = { status: 'running', added: 0, updated: 0, removed: 0, found: 0, message: '扫描中…' }
-  for (let i = 0; i < 3600; i++) {
-    try {
-      const res = libId ? await getScanStatus(libId) : null
-      const data = res && res.data
-      if (data) scanResult.value = data
-      await loadLibs()
-      await store.fetchList()
-      const st = data && data.status
-      if (st === 'done' || st === 'error' || st === 'idle') {
-        if (st === 'error') ElMessage.error((data && (data.error || data.message)) || t('lib.scanFail'))
-        else ElMessage.success(t('lib.scanOk'))
-        break
-      }
-    } catch {}
-    await new Promise(r => setTimeout(r, 1500))
+  const key = libId != null ? libId : '_tmp'
+  if (polling.has(key)) {
+    if (after) after()
+    return
   }
-  if (after) after()
+  polling.add(key)
+  setScanStatus(key, { status: 'running', added: 0, updated: 0, removed: 0, found: 0, processed: 0, message: t('lib.scanning') })
+  try {
+    for (let i = 0; i < 3600; i++) {
+      try {
+        const res = libId ? await getScanStatus(libId) : null
+        const data = res && res.data
+        if (data) setScanStatus(key, data)
+        await loadLibs()
+        await store.fetchList()
+        const st = data && data.status
+        if (st === 'done' || st === 'error' || st === 'idle') {
+          if (st === 'error') ElMessage.error((data && (data.error || data.message)) || t('lib.scanFail'))
+          else if (st === 'done') ElMessage.success(t('lib.scanOk'))
+          break
+        }
+      } catch {}
+      await new Promise(r => setTimeout(r, 1500))
+    }
+  } finally {
+    polling.delete(key)
+    if (after) after()
+  }
 }
 
 async function doScan() {
@@ -161,11 +278,12 @@ async function doScan() {
   }
 }
 async function rescan(lib) {
+  if (isLibScanning(lib)) return
   lib._sc = true
   try {
     if (lib.id) await scanLibrary(lib.id)
     else await scanMedia(lib.path)
-    await pollScan(lib.id, () => { lib._sc = false })
+    await pollScan(lib.id || lib.path, () => { lib._sc = false })
   } catch (e) {
     ElMessage.error(e.response?.data?.detail || t('lib.scanFail'))
     lib._sc = false
@@ -223,9 +341,35 @@ onMounted(async () => {
 .add-form { display:flex; gap:10px; flex-wrap:wrap; }
 .add-form .el-input { flex:1; min-width:200px; }
 .lib-list { display:flex; flex-direction:column; gap:10px; }
-.lib-item { display:flex; align-items:center; justify-content:space-between; padding:12px 16px; background:var(--bg); border-radius:8px; border:1px solid var(--border); }
-.lib-info { display:flex; align-items:center; gap:12px; }
+.lib-item {
+  display:flex; flex-direction:column; gap:10px;
+  padding:12px 16px; background:var(--bg); border-radius:8px; border:1px solid var(--border);
+}
+.lib-item.scanning { border-color: rgba(0,164,220,.45); box-shadow: 0 0 0 1px rgba(0,164,220,.12); }
+.lib-main { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+.lib-info { display:flex; align-items:center; gap:12px; min-width:0; }
+.lib-text { min-width:0; }
 .lib-name { font-weight:600; font-size:14px; }
-.lib-path { font-size:12px; color:var(--text-muted); margin-top:2px; }
-.lib-acts { display:flex; align-items:center; gap:8px; }
+.lib-path { font-size:12px; color:var(--text-muted); margin-top:2px; word-break:break-all; }
+.lib-acts { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.lib-scan { padding-top:2px; }
+.lib-scan-row { display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; gap:8px; }
+.lib-scan-phase { font-size:12px; color:var(--text-dim); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.lib-scan-pct { font-size:12px; font-weight:600; color:var(--accent); font-variant-numeric:tabular-nums; }
+.scan-meta {
+  display:flex; flex-wrap:wrap; gap:8px 14px; margin-top:6px;
+  font-size:11px; color:var(--text-muted);
+}
+.scan-current { max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.scan-counts { font-variant-numeric:tabular-nums; }
+
+.scan-sticky {
+  position: sticky; top: 0; z-index: 20;
+  padding: 12px 14px; border-radius: 8px;
+  background: rgba(20,20,20,.92); border: 1px solid rgba(0,164,220,.35);
+  backdrop-filter: blur(8px);
+}
+.scan-sticky-head { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; }
+.scan-sticky-title { font-size:13px; font-weight:600; color:var(--accent); }
+.scan-sticky-pct { font-size:13px; font-weight:700; color:var(--accent); font-variant-numeric:tabular-nums; }
 </style>

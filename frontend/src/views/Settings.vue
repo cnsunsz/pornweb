@@ -6,6 +6,7 @@
       <button class="side-item" :class="{on: tab==='users'}" v-if="auth.isAdmin" @click="tab='users'">{{ t('dash.users') }}</button>
       <button class="side-item" :class="{on: tab==='libraries'}" v-if="auth.isAdmin" @click="tab='libraries'">{{ t('dash.libraries') }}</button>
       <div class="side-title">{{ t('dash.account') }}</div>
+      <button class="side-item" :class="{on: tab==='playback'}" @click="tab='playback'">{{ t('playback.title') }}</button>
       <button class="side-item" :class="{on: tab==='account'}" @click="tab='account'">{{ t('dash.myAccount') }}</button>
     </aside>
 
@@ -61,6 +62,95 @@
         <Admin />
       </div>
 
+      <!-- Playback settings: chip + switch layout mirroring Android PlaybackSettingsScreen -->
+      <div v-if="tab==='playback'">
+        <h2>{{ t('playback.title') }}</h2>
+        <p class="hint">{{ t('playback.hint') }}</p>
+
+        <el-card>
+          <template #header><span class="ch">{{ t('playback.defaultSpeed') }}</span></template>
+          <div class="chip-row">
+            <button
+              v-for="s in speedOptions"
+              :key="'ds'+s"
+              type="button"
+              class="chip"
+              :class="{ on: prefs.defaultSpeed === s }"
+              @click="prefs.defaultSpeed = s"
+            >{{ s === 1 ? '1.0x' : s + 'x' }}</button>
+          </div>
+        </el-card>
+
+        <el-card style="margin-top:16px">
+          <template #header><span class="ch">{{ t('playback.longPressSpeed') }}</span></template>
+          <p class="sub-hint">{{ t('playback.longPressHint') }}</p>
+          <div class="chip-row">
+            <button
+              v-for="s in longPressOptions"
+              :key="'lp'+s"
+              type="button"
+              class="chip"
+              :class="{ on: prefs.longPressSpeed === s }"
+              @click="prefs.longPressSpeed = s"
+            >{{ s }}x</button>
+          </div>
+        </el-card>
+
+        <el-card style="margin-top:16px">
+          <template #header><span class="ch">{{ t('playback.skipSeconds') }}</span></template>
+          <p class="sub-hint">{{ t('playback.skipHint') }}</p>
+          <div class="chip-row">
+            <button
+              v-for="s in skipOptions"
+              :key="'sk'+s"
+              type="button"
+              class="chip"
+              :class="{ on: prefs.skipSeconds === s }"
+              @click="prefs.skipSeconds = s"
+            >{{ s }}s</button>
+          </div>
+        </el-card>
+
+        <el-card style="margin-top:16px">
+          <template #header><span class="ch">{{ t('playback.swipeSeek') }}</span></template>
+          <p class="sub-hint">{{ t('playback.swipeHint') }}</p>
+          <div class="chip-row">
+            <button
+              v-for="s in swipeOptions"
+              :key="'sw'+s"
+              type="button"
+              class="chip"
+              :class="{ on: prefs.swipeSeekSeconds === s }"
+              @click="prefs.swipeSeekSeconds = s"
+            >{{ s }}s</button>
+          </div>
+        </el-card>
+
+        <el-card style="margin-top:16px">
+          <template #header><span class="ch">{{ t('playback.switches') }}</span></template>
+          <div class="switch-list">
+            <div class="switch-row" @click="prefs.doubleTapSeek = !prefs.doubleTapSeek">
+              <span>{{ t('playback.doubleTap') }}</span>
+              <el-switch v-model="prefs.doubleTapSeek" @click.stop />
+            </div>
+            <div class="switch-row" @click="prefs.leftLongPressRewind = !prefs.leftLongPressRewind">
+              <span>{{ t('playback.leftRewind') }}</span>
+              <el-switch v-model="prefs.leftLongPressRewind" @click.stop />
+            </div>
+            <div class="switch-row" @click="prefs.autoFullscreen = !prefs.autoFullscreen">
+              <span>{{ t('playback.autoFullscreen') }}</span>
+              <el-switch v-model="prefs.autoFullscreen" @click.stop />
+            </div>
+            <div class="switch-row" @click="prefs.resumeOnOpen = !prefs.resumeOnOpen">
+              <span>{{ t('playback.resumeOnOpen') }}</span>
+              <el-switch v-model="prefs.resumeOnOpen" @click.stop />
+            </div>
+          </div>
+        </el-card>
+
+        <p class="foot-hint">{{ t('playback.footHint') }}</p>
+      </div>
+
       <div v-if="tab==='account'">
         <h2>{{ t('dash.myAccount') }}</h2>
         <el-card>
@@ -102,6 +192,7 @@ import { getServerSettings, updateServerSettings } from '@/api/settings'
 import { changePassword } from '@/api/users'
 import { ElMessage } from 'element-plus'
 import { setLocale, SUPPORTED, apiError } from '@/i18n'
+import { usePlayerPrefs } from '@/composables/usePlayerPrefs'
 import Admin from '@/views/Admin.vue'
 import UserManagement from '@/views/UserManagement.vue'
 
@@ -110,6 +201,7 @@ const langs = SUPPORTED
 const auth = useAuthStore()
 const route = useRoute()
 const router = useRouter()
+const prefs = usePlayerPrefs()
 const tab = ref('account')
 const saving = ref(false)
 const restartHint = ref(false)
@@ -121,6 +213,11 @@ const form = reactive({
   media_root: '',
   env_file: ''
 })
+
+const speedOptions = [0.75, 1.0, 1.25, 1.5, 2.0]
+const longPressOptions = [2, 3, 4]
+const skipOptions = [5, 10, 15, 30]
+const swipeOptions = [60, 90, 120, 180]
 
 const pwRef = ref()
 const pwBusy = ref(false)
@@ -135,8 +232,8 @@ function onLang(code) { setLocale(code) }
 function applyTab(q) {
   const key = Array.isArray(q) ? q[0] : q
   const allowed = auth.isAdmin
-    ? ['server', 'users', 'libraries', 'account']
-    : ['account']
+    ? ['server', 'users', 'libraries', 'playback', 'account']
+    : ['playback', 'account']
   tab.value = allowed.includes(key) ? key : (auth.isAdmin ? 'server' : 'account')
 }
 
@@ -204,7 +301,24 @@ async function changePw() {
 .pane { flex:1; padding: 24px 28px; overflow:auto; }
 .pane h2 { font-size:22px; margin-bottom:8px; }
 .hint { color:var(--text-dim); font-size:13px; margin-bottom:16px; }
+.sub-hint { color:var(--text-muted); font-size:12px; margin: -4px 0 10px; }
+.foot-hint { color:var(--text-muted); font-size:12px; margin-top:16px; line-height:1.6; }
 .ch { font-weight:600; }
 .note { margin-left:12px; color:var(--text-muted); font-size:12px; }
 .mono { font-family: ui-monospace, Consolas, monospace; font-size:12px; color:var(--text-dim); word-break:break-all; }
+
+.chip-row { display:flex; flex-wrap:wrap; gap:8px; }
+.chip {
+  border: 1px solid var(--border); background: var(--bg); color: var(--text-dim);
+  padding: 8px 14px; border-radius: 999px; cursor: pointer; font-size: 13px; font-weight: 600;
+}
+.chip:hover { border-color: var(--accent); color: var(--text); }
+.chip.on { background: rgba(0,164,220,.18); border-color: var(--accent); color: var(--accent); }
+
+.switch-list { display:flex; flex-direction:column; }
+.switch-row {
+  display:flex; align-items:center; justify-content:space-between; gap:16px;
+  padding: 12px 0; border-bottom: 1px solid var(--border); cursor: pointer; font-size: 14px;
+}
+.switch-row:last-child { border-bottom: 0; }
 </style>
