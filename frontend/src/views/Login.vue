@@ -1,8 +1,9 @@
 <template>
   <div class="auth-page">
+    <div class="auth-glow" aria-hidden="true"></div>
     <div class="auth-card">
       <div class="auth-logo">
-        <div class="wordmark"><span class="p">Porn</span><span class="w">Web</span></div>
+        <BrandLogo size="lg" breathe />
         <p>{{ t('auth.loginTitle') }}</p>
       </div>
       <el-form ref="formRef" :model="f" :rules="rules" @submit.prevent="submit">
@@ -25,6 +26,7 @@ import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import { ElMessage } from 'element-plus'
 import { apiError } from '@/i18n'
+import BrandLogo from '@/components/BrandLogo.vue'
 const { t } = useI18n()
 const router = useRouter(); const auth = useAuthStore()
 const formRef = ref(); const busy = ref(false)
@@ -45,31 +47,46 @@ async function submit() {
 .auth-page {
   min-height: 100vh;
   display: flex; align-items: center; justify-content: center;
-  background:
-    radial-gradient(ellipse at 30% 0%, rgba(255,163,26,0.12), transparent 50%),
-    radial-gradient(ellipse at 70% 100%, rgba(255,163,26,0.06), transparent 45%),
-    #050505;
+  background: #050505;
   padding: 24px;
+  position: relative;
+  overflow: hidden;
+}
+.auth-glow {
+  position: absolute;
+  inset: -20%;
+  background:
+    radial-gradient(ellipse at 32% 18%, rgba(255,163,26,0.16), transparent 42%),
+    radial-gradient(ellipse at 72% 88%, rgba(255,163,26,0.08), transparent 40%);
+  animation: glow-pulse 5.5s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes glow-pulse {
+  0%, 100% { opacity: 0.72; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.04); }
 }
 .auth-card {
+  position: relative;
+  z-index: 1;
   width: 400px; max-width: 100%;
   padding: 36px 32px;
   background: #121212;
   border: 1px solid #2a2a2a;
-  border-radius: 8px;
-  box-shadow: 0 20px 60px rgba(0,0,0,0.55);
+  border-radius: 10px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.55), 0 0 0 1px rgba(255,163,26,0.04);
+  animation: card-in 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes card-in {
+  from { opacity: 0; transform: translateY(14px) scale(0.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
 }
 .auth-logo { text-align: center; margin-bottom: 28px; }
-.wordmark {
-  display: inline-flex; align-items: center;
-  font-size: 32px; font-weight: 900; letter-spacing: -0.02em; line-height: 1;
-}
-.wordmark .p { color: #fff; }
-.wordmark .w {
-  background: var(--accent); color: #111;
-  padding: 4px 8px 5px; margin-left: 2px; border-radius: 4px;
-}
-.auth-logo p { color: var(--text-dim); font-size: 14px; margin-top: 14px; }
+.auth-logo :deep(.brand) { justify-content: center; }
+.auth-logo p { color: var(--text-dim); font-size: 14px; margin-top: 16px; }
 .auth-link { text-align: center; margin-top: 18px; font-size: 14px; color: var(--text-dim); }
 .auth-link a { margin-left: 6px; font-weight: 700; }
+@media (prefers-reduced-motion: reduce) {
+  .auth-glow { animation: none; }
+  .auth-card { animation: none; }
+}
 </style>

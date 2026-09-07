@@ -1,5 +1,15 @@
 # Changelog
 
+## v2.0.1
+### 改进
+- **品牌字标重设计**：去掉 Pornhub 式「白字 + 橙底黑字 Web」克隆；改为独立 PornWeb 标识（圆角媒体框 + 播放三角 + 网络节点图标，字标 Web 用强调色下划线）
+- 顶栏 Logo、登录/注册页、favicon 同步新标识
+- 登录/注册页增加克制动效：卡片淡入上滑、背景柔光脉冲、Logo 轻微呼吸（尊重 `prefers-reduced-motion`）
+- 首页保持 v2.0.0 Tube 密集封面墙布局不变
+
+### 说明
+- 打包仍避免 element-plus 单独 `manualChunks`；入口脚本不加 `?v=` 缓存破坏（依赖 Nginx 对 `index.html` 的 no-store）
+
 ## v2.0.0
 ### 新增
 - 公共浏览 UI 全面改为成人 Tube 站视觉（Pornhub / 法国啄木鸟风格）：炭黑底、橙金强调色、密集封面墙

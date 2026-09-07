@@ -2,7 +2,7 @@
   <header class="header">
     <div class="header-inner">
       <router-link to="/" class="logo" :aria-label="'PornWeb'">
-        <span class="logo-porn">Porn</span><span class="logo-web">Web</span>
+        <BrandLogo size="sm" />
       </router-link>
 
       <form class="search-wrap" @submit.prevent="goSearch">
@@ -46,6 +46,7 @@ import { ref, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
+import BrandLogo from '@/components/BrandLogo.vue'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -88,22 +89,13 @@ function onCommand(cmd) {
 .logo {
   display: inline-flex;
   align-items: center;
-  font-size: 20px;
-  font-weight: 800;
-  letter-spacing: -0.02em;
   white-space: nowrap;
   line-height: 1;
   flex-shrink: 0;
+  text-decoration: none;
+  color: inherit;
 }
-.logo-porn { color: #fff; }
-.logo-web {
-  background: var(--accent);
-  color: #111;
-  padding: 3px 7px 4px;
-  margin-left: 1px;
-  border-radius: 3px;
-  font-weight: 900;
-}
+.logo:hover { opacity: 0.92; }
 .search-wrap {
   display: flex;
   flex: 1;
