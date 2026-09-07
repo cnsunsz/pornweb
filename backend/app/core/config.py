@@ -21,7 +21,11 @@ class Settings(BaseSettings):
     # Emby-style auto library scan (watchdog + periodic safety net for rclone FUSE)
     AUTO_SCAN_ENABLED: bool = True
     AUTO_SCAN_INTERVAL_MINUTES: int = 15
-    # Optional cloud metadata scrapers (NFO first; soft-fail)
+    # Optional cloud metadata (Emby/Jellyfin-style: prefer local NFO, soft-fail providers)
+    SCRAPER_PREFER_LOCAL: bool = True
+    SCRAPER_INTERNET_ENABLED: bool = True
+    SCRAPER_METADATA_LANGUAGE: str = "zh-CN"
+    SCRAPER_SAVE_ARTWORK: bool = False  # stub: not yet writing posters beside media files
     SCRAPER_DOUBAN_ENABLED: bool = False
     SCRAPER_TMDB_ENABLED: bool = False
     SCRAPER_JAVDB_ENABLED: bool = False

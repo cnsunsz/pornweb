@@ -18,15 +18,17 @@ def scrape_tmdb(
     timeout: float = 8.0,
     proxy: Optional[str] = None,
     media_type: str = "movie",
+    language: str = "zh-CN",
 ) -> ScrapeResult:
     out = empty_result("tmdb")
     if not api_key or not (title or "").strip():
         return out
     q = title.strip()
+    lang = (language or "zh-CN").strip() or "zh-CN"
     try:
         with httpx.Client(timeout=timeout, proxy=proxy or None, follow_redirects=True) as client:
             kind = "tv" if media_type == "tvshow" else "movie"
-            params = {"api_key": api_key, "query": q, "include_adult": "true", "language": "zh-CN"}
+            params = {"api_key": api_key, "query": q, "include_adult": "true", "language": lang}
             if year and kind == "movie":
                 params["year"] = str(year)
             r = client.get(f"{TMDB_API}/search/{kind}", params=params)
@@ -49,7 +51,7 @@ def scrape_tmdb(
             if tid:
                 dr = client.get(
                     f"{TMDB_API}/{kind}/{tid}",
-                    params={"api_key": api_key, "language": "zh-CN"},
+                    params={"api_key": api_key, "language": lang},
                 )
                 if dr.status_code == 200:
                     detail = dr.json() or {}

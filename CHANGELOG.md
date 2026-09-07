@@ -1,5 +1,18 @@
 # Changelog
 
+## v2.1.1
+### 改进
+- **元数据设置对齐 Emby / Jellyfin**：控制台「元数据」改为「优先本地 NFO」「启用互联网下载器」+ 按源启用的下载器列表（TMDB / 豆瓣 / JavDB），TMDB API Key 放在源详情行；语言偏好、保存图片到媒体夹（占位）、高级 Cookie/代理/顺序折叠
+- 文案澄清：识别/刷新与扫库共用这些源；**只补元数据与海报 URL，不替换本地视频文件**；详情按钮改为「识别/刷新元数据」
+- **仅管理员**可读取/修改刮削相关服务器设置（`GET/PUT /api/settings/`）；`POST /api/media/{id}/scrape` 改为管理员；非管理员设置页不显示元数据区块（本就无服务器页）
+- 新增配置：`SCRAPER_PREFER_LOCAL`、`SCRAPER_INTERNET_ENABLED`、`SCRAPER_METADATA_LANGUAGE`、`SCRAPER_SAVE_ARTWORK`（热更新）；TMDB 请求使用配置的语言
+
+### 说明
+- Android **不实现**刮削配置与触发（云端 Web / 管理员操作）
+- 各下载器仍 soft-fail；打包避免 element-plus 单独 `manualChunks`
+
+
+
 ## v2.1.0
 ### 新增
 - **可选云端刮削**：豆瓣（Douban）、TMDB、JavDB。本地 NFO 优先；元数据不足时在扫库 `scrape` 阶段或单片刷新时补全

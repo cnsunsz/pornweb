@@ -494,10 +494,11 @@ async def scrape_media(
     media_id: int,
     req: Optional[ScrapeRequest] = None,
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    admin: User = Depends(get_current_admin),
 ):
-    """Cloud metadata scrape for one title. Soft-fails; prefers filling empty fields.
+    """Admin-only: identify/refresh metadata via enabled internet providers.
 
+    Soft-fails; prefers filling empty fields (does not replace local media files).
     Body (all optional): `{ "providers": ["tmdb","douban","javdb"], "force": false }`
     When `providers` omitted, uses enabled scrapers in `SCRAPER_ORDER`.
     """
@@ -531,7 +532,7 @@ async def scrape_media(
         raise HTTPException(status_code=502, detail=f"刮削失败: {exc}")
 
     prow = db.execute(select(PlaybackProgress).where(
-        PlaybackProgress.user_id == user.id, PlaybackProgress.media_id == media_id
+        PlaybackProgress.user_id == admin.id, PlaybackProgress.media_id == media_id
     )).scalar_one_or_none()
     return ScrapeResponse(
         ok=True,

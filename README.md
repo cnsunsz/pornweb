@@ -144,26 +144,26 @@ Debian 包说明见 `packaging/README.md`。
 **作品列表响应** 与 `GET /api/media/list` 相同：`{ items, total, page, page_size }`（每项为 `MediaResponse`）。查询参数：`page`、`page_size`、`sort`（`newest` / `title` / `rating` / `year`）。
 
 
-## 云端刮削 API（Web / Android）
+## 元数据 / 云端刮削 API（仅管理员 · Web）
 
-鉴权：`Authorization: Bearer <token>`。本地 NFO 优先；云端为可选补全，失败软跳过。
+鉴权：`Authorization: Bearer <admin token>`。对齐 Emby / Jellyfin：优先本地 NFO；互联网下载器可选、按源启用；失败软跳过。**不替换本地视频文件**。Android 客户端不实现刮削配置与触发。
 
-### 设置（管理员可写）
+### 设置（管理员读写）
 
-`GET /api/settings/` / `PUT /api/settings/` 响应与请求体在原有字段上**增量**增加：
+`GET /api/settings/` / `PUT /api/settings/`（均需 `is_admin`）增量字段：
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
-| `scraper_douban_enabled` | bool | 豆瓣 |
-| `scraper_tmdb_enabled` | bool | TMDB |
-| `scraper_javdb_enabled` | bool | JavDB |
-| `tmdb_api_key` | string | TMDB Key（启用 TMDB 时必填） |
-| `scraper_order` | string | 如 `nfo,tmdb,douban,javdb` |
-| `scraper_proxy` | string | 可选代理 |
-| `scraper_douban_cookie` / `scraper_javdb_cookie` | string | 可选 |
-| `scraper_timeout_seconds` | number | 默认 8 |
+| `scraper_prefer_local` | bool | 优先本地 NFO / 已有元数据（默认 true） |
+| `scraper_internet_enabled` | bool | 总开关：启用互联网元数据下载器 |
+| `scraper_metadata_language` | string | 如 `zh-CN`（TMDB 等） |
+| `scraper_save_artwork` | bool | 保存图片到媒体夹（当前占位，未落盘） |
+| `scraper_douban_enabled` / `scraper_tmdb_enabled` / `scraper_javdb_enabled` | bool | 按源启用 |
+| `tmdb_api_key` | string | 启用 TMDB 时必填 |
+| `scraper_order` | string | 高级：如 `nfo,tmdb,douban,javdb` |
+| `scraper_proxy` / cookies / `scraper_timeout_seconds` | … | 高级可选 |
 
-### 单片刮削
+### 单片识别 / 刷新（管理员）
 
 `POST /api/media/{id}/scrape`
 
@@ -171,11 +171,11 @@ Debian 包说明见 `packaging/README.md`。
 { "providers": ["tmdb", "douban", "javdb"], "force": false }
 ```
 
-- `providers` 省略则使用已启用源与 `scraper_order`
+- `providers` 省略则使用已启用源与顺序
 - `force=false`（默认）只补空字段；`true` 允许覆盖
-- 响应：`{ ok, skipped, changed, providers_tried, providers_used, provider, item }`（`item` 为 `MediaResponse`）
+- 响应：`{ ok, skipped, changed, providers_tried, providers_used, provider, item }`
 
-扫库进度 `phase` 可能为：`discover` → `metadata` → `scrape` → `cleanup` → `done`。
+扫库进度 `phase`：`discover` → `metadata` → `scrape` → `cleanup` → `done`（尊重 prefer-local 与已启用下载器）。
 
 ## 许可
 

@@ -71,36 +71,120 @@
         </el-card>
 
 
-        <el-card style="margin-top:16px">
-          <template #header><span class="ch">{{ t('dash.cloudScrape') }}</span></template>
-          <p class="sub-hint">{{ t('dash.cloudScrapeHint') }}</p>
-          <el-form label-width="160px" style="max-width:640px">
-            <el-form-item :label="t('dash.scraperTmdb')">
-              <el-switch v-model="form.scraper_tmdb_enabled" />
-              <span class="note">{{ t('dash.scraperTmdbHint') }}</span>
-            </el-form-item>
-            <el-form-item :label="t('dash.tmdbApiKey')">
-              <el-input v-model="form.tmdb_api_key" type="password" show-password :placeholder="t('dash.tmdbApiKeyPh')" style="max-width:360px" />
-            </el-form-item>
-            <el-form-item :label="t('dash.scraperDouban')">
-              <el-switch v-model="form.scraper_douban_enabled" />
-              <span class="note">{{ t('dash.scraperDoubanHint') }}</span>
-            </el-form-item>
-            <el-form-item :label="t('dash.scraperJavdb')">
-              <el-switch v-model="form.scraper_javdb_enabled" />
-              <span class="note">{{ t('dash.scraperJavdbHint') }}</span>
-            </el-form-item>
-            <el-form-item :label="t('dash.scraperOrder')">
-              <el-input v-model="form.scraper_order" :placeholder="t('dash.scraperOrderPh')" style="max-width:360px" />
-              <span class="note">{{ t('dash.scraperOrderHint') }}</span>
-            </el-form-item>
-            <el-form-item :label="t('dash.scraperProxy')">
-              <el-input v-model="form.scraper_proxy" :placeholder="t('dash.scraperProxyPh')" style="max-width:360px" />
-            </el-form-item>
-            <el-form-item>
-              <el-button type="primary" :loading="saving" @click="saveServer">{{ t('dash.save') }}</el-button>
-            </el-form-item>
-          </el-form>
+        <!-- Emby / Jellyfin-style metadata settings (admin-only; already gated by tab) -->
+        <el-card style="margin-top:16px" class="meta-card">
+          <template #header><span class="ch">{{ t('dash.metadata') }}</span></template>
+          <p class="sub-hint">{{ t('dash.metadataHint') }}</p>
+
+          <div class="switch-list meta-top">
+            <div class="switch-row" @click="form.scraper_prefer_local = !form.scraper_prefer_local">
+              <div class="switch-copy">
+                <span class="switch-label">{{ t('dash.preferLocal') }}</span>
+                <span class="switch-desc">{{ t('dash.preferLocalHint') }}</span>
+              </div>
+              <el-switch v-model="form.scraper_prefer_local" @click.stop />
+            </div>
+            <div class="switch-row" @click="form.scraper_internet_enabled = !form.scraper_internet_enabled">
+              <div class="switch-copy">
+                <span class="switch-label">{{ t('dash.internetProviders') }}</span>
+                <span class="switch-desc">{{ t('dash.internetProvidersHint') }}</span>
+              </div>
+              <el-switch v-model="form.scraper_internet_enabled" @click.stop />
+            </div>
+            <div class="switch-row static">
+              <div class="switch-copy">
+                <span class="switch-label">{{ t('dash.metaLanguage') }}</span>
+                <span class="switch-desc">{{ t('dash.metaLanguageHint') }}</span>
+              </div>
+              <el-select v-model="form.scraper_metadata_language" style="width:160px" @click.stop>
+                <el-option label="简体中文 (zh-CN)" value="zh-CN" />
+                <el-option label="繁體中文 (zh-TW)" value="zh-TW" />
+                <el-option label="English (en-US)" value="en-US" />
+                <el-option label="日本語 (ja-JP)" value="ja-JP" />
+                <el-option label="한국어 (ko-KR)" value="ko-KR" />
+              </el-select>
+            </div>
+            <div class="switch-row" @click="form.scraper_save_artwork = !form.scraper_save_artwork">
+              <div class="switch-copy">
+                <span class="switch-label">{{ t('dash.saveArtwork') }}</span>
+                <span class="switch-desc">{{ t('dash.saveArtworkHint') }}</span>
+              </div>
+              <el-switch v-model="form.scraper_save_artwork" @click.stop />
+            </div>
+          </div>
+
+          <div class="provider-block" :class="{ dim: !form.scraper_internet_enabled }">
+            <div class="provider-title">{{ t('dash.providersTitle') }}</div>
+            <p class="provider-note">{{ t('dash.providersNote') }}</p>
+
+            <div class="provider-row">
+              <div class="provider-main" @click="expandTmdb = !expandTmdb">
+                <div class="provider-info">
+                  <span class="provider-name">TMDB</span>
+                  <span class="provider-desc">{{ t('dash.scraperTmdbHint') }}</span>
+                </div>
+                <el-switch v-model="form.scraper_tmdb_enabled" :disabled="!form.scraper_internet_enabled" @click.stop />
+              </div>
+              <div v-show="expandTmdb || form.scraper_tmdb_enabled" class="provider-detail">
+                <label class="detail-label">{{ t('dash.tmdbApiKey') }}</label>
+                <el-input
+                  v-model="form.tmdb_api_key"
+                  type="password"
+                  show-password
+                  :placeholder="t('dash.tmdbApiKeyPh')"
+                  :disabled="!form.scraper_internet_enabled"
+                />
+              </div>
+            </div>
+
+            <div class="provider-row">
+              <div class="provider-main">
+                <div class="provider-info">
+                  <span class="provider-name">{{ t('dash.scraperDoubanName') }}</span>
+                  <span class="provider-desc">{{ t('dash.scraperDoubanHint') }}</span>
+                </div>
+                <el-switch v-model="form.scraper_douban_enabled" :disabled="!form.scraper_internet_enabled" />
+              </div>
+            </div>
+
+            <div class="provider-row">
+              <div class="provider-main">
+                <div class="provider-info">
+                  <span class="provider-name">JavDB</span>
+                  <span class="provider-desc">{{ t('dash.scraperJavdbHint') }}</span>
+                </div>
+                <el-switch v-model="form.scraper_javdb_enabled" :disabled="!form.scraper_internet_enabled" />
+              </div>
+            </div>
+          </div>
+
+          <el-collapse class="adv-collapse">
+            <el-collapse-item :title="t('dash.metaAdvanced')" name="adv">
+              <el-form label-width="140px" style="max-width:560px">
+                <el-form-item :label="t('dash.scraperOrder')">
+                  <el-input v-model="form.scraper_order" :placeholder="t('dash.scraperOrderPh')" />
+                  <span class="note block">{{ t('dash.scraperOrderHint') }}</span>
+                </el-form-item>
+                <el-form-item :label="t('dash.scraperProxy')">
+                  <el-input v-model="form.scraper_proxy" :placeholder="t('dash.scraperProxyPh')" />
+                </el-form-item>
+                <el-form-item :label="t('dash.scraperTimeout')">
+                  <el-input-number v-model="form.scraper_timeout_seconds" :min="2" :max="30" :step="1" controls-position="right" />
+                  <span class="note">{{ t('dash.scraperTimeoutHint') }}</span>
+                </el-form-item>
+                <el-form-item :label="t('dash.doubanCookie')">
+                  <el-input v-model="form.scraper_douban_cookie" type="textarea" :rows="2" :placeholder="t('dash.cookiePh')" />
+                </el-form-item>
+                <el-form-item :label="t('dash.javdbCookie')">
+                  <el-input v-model="form.scraper_javdb_cookie" type="textarea" :rows="2" :placeholder="t('dash.cookiePh')" />
+                </el-form-item>
+              </el-form>
+            </el-collapse-item>
+          </el-collapse>
+
+          <div style="margin-top:14px">
+            <el-button type="primary" :loading="saving" @click="saveServer">{{ t('dash.save') }}</el-button>
+          </div>
         </el-card>
 
         <el-alert v-if="restartHint" :title="t('dash.restartAlert')" type="warning" show-icon style="margin-top:16px" />
@@ -265,6 +349,10 @@ const form = reactive({
   media_root: '',
   auto_scan_enabled: true,
   auto_scan_interval_minutes: 15,
+  scraper_prefer_local: true,
+  scraper_internet_enabled: true,
+  scraper_metadata_language: 'zh-CN',
+  scraper_save_artwork: false,
   scraper_douban_enabled: false,
   scraper_tmdb_enabled: false,
   scraper_javdb_enabled: false,
@@ -276,6 +364,7 @@ const form = reactive({
   scraper_timeout_seconds: 8,
   env_file: ''
 })
+const expandTmdb = ref(false)
 
 const speedOptions = [0.75, 1.0, 1.25, 1.5, 2.0]
 const longPressOptions = [2, 3, 4]
@@ -327,12 +416,19 @@ async function saveServer() {
       app_name: form.app_name,
       auto_scan_enabled: form.auto_scan_enabled,
       auto_scan_interval_minutes: form.auto_scan_interval_minutes,
+      scraper_prefer_local: form.scraper_prefer_local,
+      scraper_internet_enabled: form.scraper_internet_enabled,
+      scraper_metadata_language: form.scraper_metadata_language,
+      scraper_save_artwork: form.scraper_save_artwork,
       scraper_douban_enabled: form.scraper_douban_enabled,
       scraper_tmdb_enabled: form.scraper_tmdb_enabled,
       scraper_javdb_enabled: form.scraper_javdb_enabled,
       tmdb_api_key: form.tmdb_api_key,
       scraper_order: form.scraper_order,
-      scraper_proxy: form.scraper_proxy
+      scraper_douban_cookie: form.scraper_douban_cookie,
+      scraper_javdb_cookie: form.scraper_javdb_cookie,
+      scraper_proxy: form.scraper_proxy,
+      scraper_timeout_seconds: form.scraper_timeout_seconds
     })
     Object.assign(form, res.data)
     restartHint.value = !!res.data.restart_required
@@ -392,4 +488,23 @@ async function changePw() {
   padding: 12px 0; border-bottom: 1px solid var(--border); cursor: pointer; font-size: 14px;
 }
 .switch-row:last-child { border-bottom: 0; }
+.switch-row.static { cursor: default; }
+.switch-copy { display:flex; flex-direction:column; gap:2px; min-width:0; flex:1; }
+.switch-label { font-size:14px; color:var(--text); }
+.switch-desc { font-size:12px; color:var(--text-muted); line-height:1.45; }
+.meta-top { margin-bottom: 8px; }
+.provider-block { margin-top: 12px; border:1px solid var(--border); border-radius:8px; padding:10px 12px; background:#0a0a0a; }
+.provider-block.dim { opacity: 0.55; pointer-events: none; }
+.provider-title { font-weight:700; font-size:13px; margin-bottom:4px; }
+.provider-note { font-size:12px; color:var(--text-muted); margin:0 0 10px; line-height:1.5; }
+.provider-row { border-top:1px solid var(--border); padding:10px 0; }
+.provider-row:first-of-type { border-top:0; padding-top:4px; }
+.provider-main { display:flex; align-items:center; justify-content:space-between; gap:16px; cursor:pointer; }
+.provider-info { display:flex; flex-direction:column; gap:2px; min-width:0; }
+.provider-name { font-weight:700; font-size:14px; }
+.provider-desc { font-size:12px; color:var(--text-muted); }
+.provider-detail { margin-top:10px; padding:10px 12px; background:var(--bg-hover); border-radius:6px; }
+.detail-label { display:block; font-size:12px; color:var(--text-dim); margin-bottom:6px; }
+.adv-collapse { margin-top:14px; border:none; }
+.note.block { display:block; margin:6px 0 0; margin-left:0; }
 </style>

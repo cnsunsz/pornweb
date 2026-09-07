@@ -48,6 +48,13 @@ def get_scraper_config() -> Dict[str, Any]:
         timeout_f = 8.0
     timeout_f = max(2.0, min(30.0, timeout_f))
     return {
+        "prefer_local": _as_bool(getattr(settings, "SCRAPER_PREFER_LOCAL", True), True),
+        "internet_enabled": _as_bool(getattr(settings, "SCRAPER_INTERNET_ENABLED", True), True),
+        "metadata_language": (
+            getattr(settings, "SCRAPER_METADATA_LANGUAGE", None) or "zh-CN"
+        ).strip()
+        or "zh-CN",
+        "save_artwork": _as_bool(getattr(settings, "SCRAPER_SAVE_ARTWORK", False), False),
         "douban_enabled": _as_bool(getattr(settings, "SCRAPER_DOUBAN_ENABLED", False)),
         "tmdb_enabled": _as_bool(getattr(settings, "SCRAPER_TMDB_ENABLED", False)),
         "javdb_enabled": _as_bool(getattr(settings, "SCRAPER_JAVDB_ENABLED", False)),
@@ -63,6 +70,8 @@ def get_scraper_config() -> Dict[str, Any]:
 
 def any_scraper_enabled(cfg: Optional[Dict[str, Any]] = None) -> bool:
     cfg = cfg or get_scraper_config()
+    if not cfg.get("internet_enabled", True):
+        return False
     if cfg["tmdb_enabled"] and cfg["tmdb_api_key"]:
         return True
     if cfg["douban_enabled"] or cfg["javdb_enabled"]:
@@ -93,6 +102,7 @@ def _run_one(
                 timeout=timeout,
                 proxy=proxy,
                 media_type=category or "movie",
+                language=cfg.get("metadata_language") or "zh-CN",
             )
         if name == "douban":
             if not cfg["douban_enabled"]:
@@ -131,8 +141,12 @@ def scrape_for_item(
     Soft-fails: never raises. Returns summary dict for API/logs.
     """
     cfg = cfg or get_scraper_config()
-    if not force and not is_meta_thin(item) and not providers:
-        return {"ok": True, "skipped": True, "reason": "meta_ok", "changed": [], "providers_tried": []}
+    # Prefer local NFO/embedded: skip internet when metadata is already good.
+    # When prefer_local is False, still only fill empty fields (merge_meta), but do not skip early.
+    if not force and cfg.get("prefer_local", True) and not is_meta_thin(item) and not providers:
+        return {"ok": True, "skipped": True, "reason": "prefer_local", "changed": [], "providers_tried": []}
+    if not providers and not cfg.get("internet_enabled", True):
+        return {"ok": True, "skipped": True, "reason": "internet_disabled", "changed": [], "providers_tried": []}
 
     hints = search_query_from_item(
         title=getattr(item, "title", "") or "",
@@ -209,6 +223,10 @@ def scrape_for_item(
 def apply_live_config(updates: Dict[str, Any]) -> None:
     """Hot-apply scraper keys onto the settings singleton."""
     mapping = {
+        "SCRAPER_PREFER_LOCAL": "SCRAPER_PREFER_LOCAL",
+        "SCRAPER_INTERNET_ENABLED": "SCRAPER_INTERNET_ENABLED",
+        "SCRAPER_METADATA_LANGUAGE": "SCRAPER_METADATA_LANGUAGE",
+        "SCRAPER_SAVE_ARTWORK": "SCRAPER_SAVE_ARTWORK",
         "SCRAPER_DOUBAN_ENABLED": "SCRAPER_DOUBAN_ENABLED",
         "SCRAPER_TMDB_ENABLED": "SCRAPER_TMDB_ENABLED",
         "SCRAPER_JAVDB_ENABLED": "SCRAPER_JAVDB_ENABLED",
@@ -222,8 +240,9 @@ def apply_live_config(updates: Dict[str, Any]) -> None:
     for env_key, attr in mapping.items():
         if env_key in updates:
             val = updates[env_key]
-            if attr.endswith("_ENABLED"):
-                setattr(settings, attr, _as_bool(val, False))
+            if attr.endswith("_ENABLED") or attr in ("SCRAPER_PREFER_LOCAL", "SCRAPER_SAVE_ARTWORK"):
+                default_true = attr in ("SCRAPER_PREFER_LOCAL", "SCRAPER_INTERNET_ENABLED")
+                setattr(settings, attr, _as_bool(val, default_true))
             elif attr == "SCRAPER_TIMEOUT_SECONDS":
                 try:
                     setattr(settings, attr, float(val))

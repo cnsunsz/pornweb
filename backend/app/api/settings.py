@@ -7,12 +7,14 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from ..core.config import settings, _ENV_PATH
 from ..models.user import User
-from .deps import get_current_user, get_current_admin
+from .deps import get_current_admin
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
 
 KEYS = ("HTTP_PORT", "BIND_HOST", "PUBLIC_PORT", "MEDIA_ROOT", "APP_NAME",
         "AUTO_SCAN_ENABLED", "AUTO_SCAN_INTERVAL_MINUTES",
+        "SCRAPER_PREFER_LOCAL", "SCRAPER_INTERNET_ENABLED",
+        "SCRAPER_METADATA_LANGUAGE", "SCRAPER_SAVE_ARTWORK",
         "SCRAPER_DOUBAN_ENABLED", "SCRAPER_TMDB_ENABLED", "SCRAPER_JAVDB_ENABLED",
         "TMDB_API_KEY", "SCRAPER_ORDER",
         "SCRAPER_DOUBAN_COOKIE", "SCRAPER_JAVDB_COOKIE", "SCRAPER_PROXY",
@@ -44,7 +46,11 @@ class ServerSettings(BaseModel):
     media_root: str = ""
     auto_scan_enabled: bool = True
     auto_scan_interval_minutes: int = Field(15, ge=1, le=1440)
-    # Cloud scrapers (additive for Android / Web)
+    # Metadata (Emby/Jellyfin-style; admin-only configure)
+    scraper_prefer_local: bool = True
+    scraper_internet_enabled: bool = True
+    scraper_metadata_language: str = "zh-CN"
+    scraper_save_artwork: bool = False
     scraper_douban_enabled: bool = False
     scraper_tmdb_enabled: bool = False
     scraper_javdb_enabled: bool = False
@@ -66,6 +72,10 @@ class ServerSettingsUpdate(BaseModel):
     media_root: Optional[str] = None
     auto_scan_enabled: Optional[bool] = None
     auto_scan_interval_minutes: Optional[int] = Field(None, ge=1, le=1440)
+    scraper_prefer_local: Optional[bool] = None
+    scraper_internet_enabled: Optional[bool] = None
+    scraper_metadata_language: Optional[str] = None
+    scraper_save_artwork: Optional[bool] = None
     scraper_douban_enabled: Optional[bool] = None
     scraper_tmdb_enabled: Optional[bool] = None
     scraper_javdb_enabled: Optional[bool] = None
@@ -201,6 +211,23 @@ def _current() -> ServerSettings:
             bool(getattr(settings, "AUTO_SCAN_ENABLED", True)),
         ),
         auto_scan_interval_minutes=max(1, min(1440, interval_i)),
+        scraper_prefer_local=_env_bool(
+            env.get("SCRAPER_PREFER_LOCAL"),
+            bool(getattr(settings, "SCRAPER_PREFER_LOCAL", True)),
+        ),
+        scraper_internet_enabled=_env_bool(
+            env.get("SCRAPER_INTERNET_ENABLED"),
+            bool(getattr(settings, "SCRAPER_INTERNET_ENABLED", True)),
+        ),
+        scraper_metadata_language=(
+            env.get("SCRAPER_METADATA_LANGUAGE")
+            or getattr(settings, "SCRAPER_METADATA_LANGUAGE", None)
+            or "zh-CN"
+        ),
+        scraper_save_artwork=_env_bool(
+            env.get("SCRAPER_SAVE_ARTWORK"),
+            bool(getattr(settings, "SCRAPER_SAVE_ARTWORK", False)),
+        ),
         scraper_douban_enabled=_env_bool(
             env.get("SCRAPER_DOUBAN_ENABLED"),
             bool(getattr(settings, "SCRAPER_DOUBAN_ENABLED", False)),
@@ -237,7 +264,8 @@ def _current() -> ServerSettings:
 
 
 @router.get("/", response_model=ServerSettings)
-async def get_settings(user: User = Depends(get_current_user)):
+async def get_settings(admin: User = Depends(get_current_admin)):
+    """Server settings including metadata scrapers — admin only."""
     return _current()
 
 
@@ -284,6 +312,28 @@ async def update_settings(req: ServerSettingsUpdate, admin: User = Depends(get_c
     if req.auto_scan_interval_minutes is not None:
         updates["AUTO_SCAN_INTERVAL_MINUTES"] = str(req.auto_scan_interval_minutes)
         cur.auto_scan_interval_minutes = req.auto_scan_interval_minutes
+    if req.scraper_prefer_local is not None:
+        updates["SCRAPER_PREFER_LOCAL"] = "true" if req.scraper_prefer_local else "false"
+        cur.scraper_prefer_local = req.scraper_prefer_local
+    if req.scraper_internet_enabled is not None:
+        updates["SCRAPER_INTERNET_ENABLED"] = "true" if req.scraper_internet_enabled else "false"
+        cur.scraper_internet_enabled = req.scraper_internet_enabled
+    if req.scraper_metadata_language is not None:
+        lang = (req.scraper_metadata_language or "").strip() or "zh-CN"
+        # Keep compact locale tags only
+        allowed_lang = {
+            "zh-CN", "zh-TW", "en-US", "en", "ja-JP", "ja", "ko-KR", "ko",
+            "fr-FR", "de-DE", "es-ES", "pt-BR", "ru-RU",
+        }
+        if lang not in allowed_lang:
+            # accept xx or xx-YY loosely
+            if not (2 <= len(lang) <= 8 and lang.replace("-", "").isalnum()):
+                raise HTTPException(400, "元数据语言无效")
+        updates["SCRAPER_METADATA_LANGUAGE"] = lang
+        cur.scraper_metadata_language = lang
+    if req.scraper_save_artwork is not None:
+        updates["SCRAPER_SAVE_ARTWORK"] = "true" if req.scraper_save_artwork else "false"
+        cur.scraper_save_artwork = req.scraper_save_artwork
     if req.scraper_douban_enabled is not None:
         updates["SCRAPER_DOUBAN_ENABLED"] = "true" if req.scraper_douban_enabled else "false"
         cur.scraper_douban_enabled = req.scraper_douban_enabled
@@ -322,8 +372,9 @@ async def update_settings(req: ServerSettingsUpdate, admin: User = Depends(get_c
     if req.scraper_timeout_seconds is not None:
         updates["SCRAPER_TIMEOUT_SECONDS"] = str(req.scraper_timeout_seconds)
         cur.scraper_timeout_seconds = float(req.scraper_timeout_seconds)
-    if cur.scraper_tmdb_enabled and not (cur.tmdb_api_key or "").strip():
-        raise HTTPException(400, "启用 TMDB 刮削时需要填写 TMDB_API_KEY")
+    internet_on = bool(cur.scraper_internet_enabled)
+    if internet_on and cur.scraper_tmdb_enabled and not (cur.tmdb_api_key or "").strip():
+        raise HTTPException(400, "启用 TMDB 元数据下载时需要填写 TMDB API Key")
     if updates:
         _write_env_all(updates)
         # Hot-apply auto-scan runtime without requiring restart
