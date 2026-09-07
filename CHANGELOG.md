@@ -1,5 +1,12 @@
 # Changelog
 
+## [v2.1.4] - 2026-09-07
+
+### 修复
+- 海报墙空白：列表/详情的 `poster_url`/`fanart_url` 统一返回同源 `/api/media/poster/{id}`（不再把豆瓣/TMDB 外链直接塞给浏览器，避免防盗链裂图）
+- `/api/media/poster|fanart/{id}` 对远程图改为服务端代抓回传，不再 307 跳转
+
+
 ## [v2.1.3] - 2026-09-07
 
 ### 修复

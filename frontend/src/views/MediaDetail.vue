@@ -112,7 +112,6 @@ const parts = computed(() => item.value?.extra_files || [])
 const streamUrl = computed(() => item.value ? getStreamUrl(item.value.id, partIndex.value) : '')
 const posterSrc = computed(() => {
   if (!item.value) return ''
-  if (item.value.poster_url?.startsWith('http')) return item.value.poster_url
   return item.value.poster_url || item.value.id ? getPosterUrl(item.value.id) : ''
 })
 const fanartSrc = computed(() => {

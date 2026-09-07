@@ -61,9 +61,8 @@ const err = ref(false)
 
 const posterSrc = computed(() => {
   if (!props.item) return ''
-  const url = props.item.poster_url
-  if (url && typeof url === 'string' && url.startsWith('http')) return url
-  if (url || props.item.id) return getPosterUrl(props.item.id)
+  // Always go through /api/media/poster/{id}?token=… — never hotlink Douban/TMDB in <img>
+  if (props.item.poster_url || props.item.id) return getPosterUrl(props.item.id)
   return ''
 })
 

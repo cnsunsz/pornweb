@@ -73,13 +73,26 @@ def _parts(item: MediaItem) -> list:
     except Exception:
         return []
 
+def _public_poster_url(item: MediaItem) -> str:
+    """Always expose same-origin poster API path so browsers avoid Douban/TMDB hotlink blocks."""
+    if (item.poster_url or "").strip():
+        return f"/api/media/poster/{item.id}"
+    return ""
+
+
+def _public_fanart_url(item: MediaItem) -> str:
+    if (item.fanart_url or "").strip():
+        return f"/api/media/fanart/{item.id}"
+    return ""
+
+
 def _to_response(item: MediaItem, progress=None) -> MediaResponse:
     return MediaResponse(
         id=item.id, title=item.title or item.filename,
         original_title=item.original_title or "", plot=item.plot or "",
         year=item.year, genre=item.genre or "", rating=item.rating,
         director=item.director or "", cast_list=item.cast_list or "[]",
-        poster_url=item.poster_url or "", fanart_url=item.fanart_url or "",
+        poster_url=_public_poster_url(item), fanart_url=_public_fanart_url(item),
         category=item.category or "movie", filename=item.filename,
         file_size=item.file_size or 0, folder=item.folder or "/",
         created_at=item.created_at.isoformat() if item.created_at else "",
@@ -195,6 +208,47 @@ async def _auth_user(request: Request, token: Optional[str], db: Session) -> Opt
     result = db.execute(select(User).where(User.id == int(uid)))
     return result.scalar_one_or_none()
 
+
+def _guess_referer(url: str) -> str:
+    u = (url or "").lower()
+    if "douban" in u or "doubanio" in u:
+        return "https://movie.douban.com/"
+    if "tmdb" in u or "themoviedb" in u:
+        return "https://www.themoviedb.org/"
+    return "https://www.google.com/"
+
+
+async def _proxy_remote_image(url: str, referer: str = ""):
+    """Fetch remote artwork server-side and stream to client (avoids hotlink 418/blank)."""
+    import httpx
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+            "(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+        ),
+        "Accept": "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
+    }
+    if referer:
+        headers["Referer"] = referer
+    try:
+        async with httpx.AsyncClient(timeout=20.0, follow_redirects=True) as client:
+            r = await client.get(url, headers=headers)
+            if r.status_code != 200 or not r.content:
+                raise HTTPException(status_code=404, detail="远程海报不可用")
+            ctype = (r.headers.get("content-type") or "image/jpeg").split(";")[0].strip()
+            if not ctype.startswith("image/"):
+                ctype = "image/jpeg"
+            return StreamingResponse(
+                iter([r.content]),
+                media_type=ctype,
+                headers={"Cache-Control": "public, max-age=86400"},
+            )
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=404, detail="远程海报拉取失败")
+
+
 @router.get("/poster/{media_id}")
 async def get_poster(
     media_id: int,
@@ -231,11 +285,10 @@ async def get_poster(
         if full_path.exists():
             return _image_response(str(full_path))
     
-    # If it's a URL, redirect
+    # Remote URL (Douban/TMDB): proxy bytes — browser hotlink/redirect often fails
     if poster.startswith("http"):
-        from fastapi.responses import RedirectResponse
-        return RedirectResponse(url=poster)
-    
+        return await _proxy_remote_image(poster, referer=_guess_referer(poster))
+
     raise HTTPException(status_code=404, detail="海报文件不存在")
 
 @router.get("/fanart/{media_id}")
@@ -266,9 +319,8 @@ async def get_fanart(
             return FileResponse(str(full_path), media_type="image/jpeg")
     
     if fanart.startswith("http"):
-        from fastapi.responses import RedirectResponse
-        return RedirectResponse(url=fanart)
-    
+        return await _proxy_remote_image(fanart, referer=_guess_referer(fanart))
+
     raise HTTPException(status_code=404, detail="背景图不存在")
 
 @router.get("/stream/{media_id}")
