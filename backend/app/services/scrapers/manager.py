@@ -156,8 +156,22 @@ def scrape_for_item(
     title = hints["title"]
     code = hints["code"]
     filename = hints["filename"]
-    year = getattr(item, "year", None)
+    year = getattr(item, "year", None) or hints.get("year")
     category = getattr(item, "category", "") or "movie"
+
+    # Filename identify (Emby-style): clean scene dumps even when cloud has no hit
+    pre_changed = []
+    raw_title = (getattr(item, "title", None) or "").strip()
+    from .base import looks_like_scene_release
+    if title and (force or looks_like_scene_release(raw_title) or raw_title.count(".") >= 3 or not raw_title):
+        if title != raw_title:
+            item.title = title
+            pre_changed.append("title")
+        if hints.get("year") and (force or not getattr(item, "year", None)):
+            item.year = hints["year"]
+            year = item.year
+            if "year" not in pre_changed:
+                pre_changed.append("year")
 
     if providers:
         order = [p.strip().lower() for p in providers if p and p.strip().lower() in PROVIDER_NAMES]
@@ -209,13 +223,14 @@ def scrape_for_item(
             if (getattr(item, "poster_url", None) or "").strip():
                 break
 
+    changed = sorted(set(list(pre_changed) + list(changed)))
     return {
         "ok": True,
         "skipped": False,
-        "changed": sorted(set(changed)),
+        "changed": changed,
         "providers_tried": tried,
         "providers_used": used,
-        "provider": used[0] if used else (last.provider if last else ""),
+        "provider": (used[0] if used else ("filename" if pre_changed else (last.provider if last else ""))),
         "title": getattr(item, "title", "") or "",
     }
 
