@@ -92,8 +92,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { Loading } from '@element-plus/icons-vue'
 import MediaCard from '@/components/MediaCard.vue'
-import { getActors, getActorMedia } from '@/api/actors'
-import { getPosterUrl } from '@/api/media'
+import { getActors, getActorMedia, getActorPhotoUrl } from '@/api/actors'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -125,8 +124,9 @@ const filtered = computed(() => {
 })
 
 function posterSrc(a) {
-  if (a.poster_media_id) return getPosterUrl(a.poster_media_id)
-  return ''
+  // 只走在线演员头像接口；404 / 失败由 onImgErr 藏掉，绝不拿作品海报顶替
+  if (!a?.name) return ''
+  return getActorPhotoUrl(a.name)
 }
 
 function onImgErr(e) {

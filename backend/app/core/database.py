@@ -51,7 +51,7 @@ def _migrate_media_columns(sync_conn):
                 raise
 
 def init_db():
-    from ..models import User, MediaItem, MediaLibrary, PlaybackProgress, ScanJob  # noqa: F401
+    from ..models import User, MediaItem, MediaLibrary, PlaybackProgress, ScanJob, ActorPhoto  # noqa: F401
     try:
         Base.metadata.create_all(bind=engine)
     except Exception as exc:

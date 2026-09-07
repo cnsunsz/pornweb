@@ -273,7 +273,8 @@ def merge_meta(item: Any, data: Dict[str, Any], *, force: bool = False) -> List[
         if isinstance(val, str) and not val.strip():
             continue
         if key == "cast_list":
-            if not _cast_nonempty(str(val)) and not force:
+            # Never wipe existing cast with empty [] — even on force scrape
+            if not _cast_nonempty(str(val)):
                 continue
         cur = getattr(item, key, None)
         empty = cur is None or (isinstance(cur, str) and not str(cur).strip())
