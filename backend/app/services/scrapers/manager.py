@@ -107,8 +107,15 @@ def _run_one(
         if name == "douban":
             if not cfg["douban_enabled"]:
                 return ScrapeResult(provider="douban")
+            # Prefer Chinese folder title; fall back to English cleaned release name.
+            alts = []
+            for a in (cfg.get("_alt_titles") or []):
+                if a and a != (title or code):
+                    alts.append(a)
             return scrape_douban(
                 title or code,
+                alt_titles=alts,
+                year=year,
                 cookie=cfg["douban_cookie"],
                 timeout=timeout,
                 proxy=proxy,
@@ -151,13 +158,21 @@ def scrape_for_item(
     hints = search_query_from_item(
         title=getattr(item, "title", "") or "",
         filename=getattr(item, "filename", "") or "",
-        file_path=getattr(item, "file_path", "") or "",
+        file_path=getattr(item, "file_path", "") or getattr(item, "folder", "") or "",
     )
     title = hints["title"]
     code = hints["code"]
     filename = hints["filename"]
     year = getattr(item, "year", None) or hints.get("year")
     category = getattr(item, "category", "") or "movie"
+    # Douban needs Chinese; folder often has 天才游戏[...] .English.Release
+    alt_titles = []
+    for key in ("zh_title", "en_title", "title"):
+        v = (hints.get(key) or "").strip()
+        if v and v not in alt_titles:
+            alt_titles.append(v)
+    cfg = dict(cfg)  # shallow copy so we can stash alts
+    cfg["_alt_titles"] = alt_titles
 
     # Filename identify (Emby-style): clean scene dumps even when cloud has no hit
     pre_changed = []
@@ -214,6 +229,14 @@ def scrape_for_item(
         used.append(name)
         ch = merge_meta(item, result.to_dict(), force=force)
         changed.extend(ch)
+        # Subsequent providers (esp. Douban) should use newly found CJK titles
+        new_t = (getattr(item, "title", None) or "").strip()
+        new_o = (getattr(item, "original_title", None) or "").strip()
+        for v in (new_t, new_o):
+            if v and v not in cfg["_alt_titles"]:
+                cfg["_alt_titles"].insert(0, v)
+        if new_t and any("一" <= c <= "鿿" for c in new_t):
+            title = new_t
         # Stop early once metadata is no longer thin (unless force + want more fields)
         if not force and not is_meta_thin(item):
             break

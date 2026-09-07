@@ -6,8 +6,39 @@ import httpx
 
 from .base import ScrapeResult, cast_to_json, empty_result
 
-TMDB_API = "https://api.themoviedb.org/3"
+# api.themoviedb.org is often unreachable on AWS China / CN networks;
+# api.tmdb.org is the same API and usually works there.
+TMDB_API = "https://api.tmdb.org/3"
+TMDB_API_FALLBACKS = (
+    "https://api.tmdb.org/3",
+    "https://api.themoviedb.org/3",
+)
 IMG_BASE = "https://image.tmdb.org/t/p"
+
+
+def _tmdb_bases(primary: Optional[str] = None):
+    seen = set()
+    for b in ((primary,) if primary else ()) + TMDB_API_FALLBACKS:
+        if not b or b in seen:
+            continue
+        seen.add(b)
+        yield b.rstrip("/")
+
+
+def _tmdb_get(client: httpx.Client, path: str, params: dict):
+    """Try CN-reachable api.tmdb.org first, then official host."""
+    last_exc = None
+    for base in _tmdb_bases(TMDB_API):
+        try:
+            r = client.get(f"{base}{path}", params=params)
+            if r.status_code == 200 or r.status_code < 500:
+                return r
+        except Exception as e:
+            last_exc = e
+            continue
+    if last_exc:
+        raise last_exc
+    raise RuntimeError("TMDB unreachable")
 
 
 def scrape_tmdb(
@@ -31,14 +62,14 @@ def scrape_tmdb(
             params = {"api_key": api_key, "query": q, "include_adult": "true", "language": lang}
             if year and kind == "movie":
                 params["year"] = str(year)
-            r = client.get(f"{TMDB_API}/search/{kind}", params=params)
+            r = _tmdb_get(client, f"/search/{kind}", params)
             if r.status_code != 200:
                 return out
             results = (r.json() or {}).get("results") or []
             if not results:
                 # fallback English / no language
                 params.pop("language", None)
-                r = client.get(f"{TMDB_API}/search/{kind}", params=params)
+                r = _tmdb_get(client, f"/search/{kind}", params)
                 if r.status_code != 200:
                     return out
                 results = (r.json() or {}).get("results") or []
@@ -49,15 +80,17 @@ def scrape_tmdb(
             detail = {}
             credits = {}
             if tid:
-                dr = client.get(
-                    f"{TMDB_API}/{kind}/{tid}",
-                    params={"api_key": api_key, "language": lang},
+                dr = _tmdb_get(
+                    client,
+                    f"/{kind}/{tid}",
+                    {"api_key": api_key, "language": lang},
                 )
                 if dr.status_code == 200:
                     detail = dr.json() or {}
-                cr = client.get(
-                    f"{TMDB_API}/{kind}/{tid}/credits",
-                    params={"api_key": api_key},
+                cr = _tmdb_get(
+                    client,
+                    f"/{kind}/{tid}/credits",
+                    {"api_key": api_key},
                 )
                 if cr.status_code == 200:
                     credits = cr.json() or {}

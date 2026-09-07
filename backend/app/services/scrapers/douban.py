@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import re
-from typing import Optional
+from typing import List, Optional, Sequence
 import httpx
 
 from .base import ScrapeResult, cast_to_json, empty_result
@@ -18,13 +18,20 @@ UA = (
 def scrape_douban(
     title: str,
     *,
+    alt_titles: Optional[Sequence[str]] = None,
+    year: Optional[int] = None,
     cookie: str = "",
     timeout: float = 8.0,
     proxy: Optional[str] = None,
 ) -> ScrapeResult:
+    """Try Chinese title first, then English alts (CN release folders often have both)."""
     out = empty_result("douban")
-    q = (title or "").strip()
-    if not q:
+    queries: List[str] = []
+    for q in [title, *(alt_titles or ())]:
+        q = (q or "").strip()
+        if q and q not in queries:
+            queries.append(q)
+    if not queries:
         return out
     headers = {
         "User-Agent": UA,
@@ -35,19 +42,25 @@ def scrape_douban(
         headers["Cookie"] = cookie
     try:
         with httpx.Client(timeout=timeout, proxy=proxy or None, follow_redirects=True, headers=headers) as client:
-            r = client.get(SUGGEST, params={"q": q})
-            if r.status_code != 200:
+            hit = None
+            for q in queries:
+                r = client.get(SUGGEST, params={"q": q})
+                if r.status_code != 200:
+                    continue
+                try:
+                    suggestions = r.json()
+                except Exception:
+                    continue
+                if not isinstance(suggestions, list) or not suggestions:
+                    continue
+                hit = _pick_suggestion(suggestions, year=year)
+                if hit:
+                    break
+            if not hit:
                 return out
-            try:
-                suggestions = r.json()
-            except Exception:
-                return out
-            if not isinstance(suggestions, list) or not suggestions:
-                return out
-            hit = suggestions[0]
             sid = str(hit.get("id") or "").strip()
             out.title = (hit.get("title") or "").strip()
-            out.year = _safe_year(hit.get("year"))
+            out.year = _safe_year(hit.get("year")) or year
             img = (hit.get("img") or "").strip()
             if img:
                 # Prefer larger cover if Douban uses s_ratio / m_ratio thumbnails
@@ -60,6 +73,14 @@ def scrape_douban(
     except Exception:
         return empty_result("douban") if not out.has_any() else out
     return out
+
+
+def _pick_suggestion(suggestions: list, year: Optional[int] = None):
+    if year:
+        for s in suggestions:
+            if _safe_year(s.get("year")) == year:
+                return s
+    return suggestions[0] if suggestions else None
 
 
 def _enrich_subject(client: httpx.Client, sid: str, out: ScrapeResult) -> None:

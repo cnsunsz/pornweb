@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass, asdict
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 
@@ -148,6 +149,39 @@ def extract_product_code(text: str) -> Optional[str]:
     return f"{prefix.upper()}-{num}"
 
 
+
+_CJK_RUN = re.compile(r"[\u4e00-\u9fff·：:]{2,}")
+_CJK_NOISE = {
+    "国语配音", "中文字幕", "粤语配音", "简体中字", "繁体中字", "中字", "内封",
+    "帧率版本", "高清", "蓝光", "未删减", "剧场版",
+}
+
+
+def extract_cjk_title(*texts: str) -> str:
+    """Pull a Chinese title from folder/filename (common CN release layout).
+
+    Example folder:
+    天才游戏[60帧率版本][国语配音+中文字幕].Game.of.Identity.2026...
+    → 天才游戏
+    """
+    for text in texts:
+        if not text:
+            continue
+        name = Path(str(text)).name
+        # Leading CJK before [ or .English
+        m = re.match(r"^([\u4e00-\u9fff·：:]{2,})", name)
+        if m:
+            return m.group(1)
+        # First non-noise CJK run
+        for m in _CJK_RUN.finditer(name):
+            s = m.group(0)
+            if s in _CJK_NOISE or any(n in s for n in ("配音", "字幕", "帧率")):
+                continue
+            if len(s) >= 2:
+                return s
+    return ""
+
+
 def search_query_from_item(
     title: str = "",
     filename: str = "",
@@ -175,8 +209,13 @@ def search_query_from_item(
     q_title = cleaned["title"] or (title or "").strip()
     if not q_title and filename:
         q_title = clean_release_title(filename)["title"]
+    zh = extract_cjk_title(file_path, filename, title)
+    # Prefer Chinese folder title as primary search when present (Douban-friendly)
+    primary = zh or q_title.strip()
     return {
-        "title": q_title.strip(),
+        "title": primary.strip(),
+        "en_title": q_title.strip(),
+        "zh_title": zh,
         "code": code or "",
         "filename": filename or "",
         "year": cleaned.get("year"),
