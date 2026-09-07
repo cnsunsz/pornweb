@@ -6,7 +6,9 @@ Android / Web 共用稳定契约（Bearer JWT，与 /api/media 相同）：
       poster_url: 有在线头像缓存时为 `/api/actors/photo?name=…`，否则空串。
       禁止用作品 `/api/media/poster/{id}` 冒充演员头像。
   GET /api/actors/photo?name=…&token=…
-    → 在线头像图（TMDB person）；没有则 404（客户端留空，勿用占位乱图）
+    → 在线头像图（TMDB → 豆瓣名人，Emby/Jellyfin 风格）；没有则 404（客户端留空，勿用占位乱图）
+  POST /api/actors/scrape-photos  （管理员）
+    → 批量补刮库内演员头像 { tried, ok, miss }
   GET /api/actors/{name}/media   （推荐；name 须 URL 编码，含 CJK）
     → MediaListResponse 同 /api/media/list
   兼容别名：GET /api/actors/{name} 、 GET /api/actors/by-name?name=
@@ -25,7 +27,7 @@ from ..core.database import get_db
 from ..models.media import MediaItem
 from ..models.user import User
 from ..models.progress import PlaybackProgress
-from .deps import get_current_user
+from .deps import get_current_user, get_current_admin
 from .media import MediaListResponse, _to_response, _auth_user
 
 router = APIRouter(prefix="/api/actors", tags=["actors"])
@@ -185,13 +187,14 @@ async def actor_photo(
 
     import httpx
 
+    referer = "https://movie.douban.com/" if "douban" in remote.lower() else "https://www.themoviedb.org/"
     headers = {
         "User-Agent": (
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
             "(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
         ),
         "Accept": "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
-        "Referer": "https://www.themoviedb.org/",
+        "Referer": referer,
     }
     try:
         async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
@@ -210,6 +213,23 @@ async def actor_photo(
         raise
     except Exception:
         raise HTTPException(status_code=404, detail="无演员头像")
+
+
+
+@router.post("/scrape-photos")
+async def scrape_actor_photos(
+    force: bool = Query(False),
+    limit: int = Query(200, ge=1, le=500),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_admin),
+):
+    """管理员：批量补刮演员头像（TMDB → 豆瓣名人）。无图记 miss，不造假图。"""
+    from ..services.actor_photos import scrape_many
+    rows = db.execute(select(MediaItem.cast_list)).all()
+    names = []
+    for (cast_raw,) in rows:
+        names.extend(_parse_cast(cast_raw))
+    return await scrape_many(db, names, force=force, limit=limit)
 
 
 @router.get("/by-name", response_model=MediaListResponse)

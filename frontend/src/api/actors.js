@@ -30,3 +30,8 @@ export function getActorMediaByQuery(name, params) {
 export function getActorPhotoUrl(name) {
   return `/api/actors/photo?name=${encodeURIComponent(name)}&token=${tokenQ()}`
 }
+
+/** 管理员：批量补刮演员在线头像 */
+export function scrapeActorPhotos(params) {
+  return api.post("/actors/scrape-photos", null, { params })
+}

@@ -1,5 +1,15 @@
 # Changelog
 
+## [v2.1.6] - 2026-09-07
+
+### 新增
+- 演员头像 Emby/Jellyfin 风格多源刮削：TMDB person → 豆瓣名人；管理端 `POST /api/actors/scrape-photos` 批量补刮
+- 设置页「立即补刮演员照」
+
+### 修复
+- 无真实头像仍返回 404 / 空 `poster_url`，禁止用作品海报冒充
+
+
 ## [v2.1.5] - 2026-09-07
 
 ### 新增

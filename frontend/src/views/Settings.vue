@@ -172,6 +172,10 @@
                   <el-input-number v-model="form.scraper_timeout_seconds" :min="2" :max="30" :step="1" controls-position="right" />
                   <span class="note">{{ t('dash.scraperTimeoutHint') }}</span>
                 </el-form-item>
+                <el-form-item :label="t('dash.actorPhotoScrape')">
+                  <el-button type="primary" plain :loading="actorPhotoScraping" @click="scrapeActorPhotosNow">{{ t('dash.actorPhotoScrapeBtn') }}</el-button>
+                  <span class="note block">{{ t('dash.actorPhotoScrapeHint') }}</span>
+                </el-form-item>
                 <el-form-item :label="t('dash.doubanCookie')">
                   <el-input v-model="form.scraper_douban_cookie" type="textarea" :rows="2" :placeholder="t('dash.cookiePh')" />
                 </el-form-item>
@@ -324,6 +328,7 @@ import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
+import { scrapeActorPhotos } from '@/api/actors'
 import { getServerSettings, updateServerSettings } from '@/api/settings'
 import { changePassword } from '@/api/users'
 import { ElMessage } from 'element-plus'
@@ -339,6 +344,7 @@ const route = useRoute()
 const router = useRouter()
 const prefs = usePlayerPrefs()
 const tab = ref('account')
+const actorPhotoScraping = ref(false)
 const saving = ref(false)
 const restartHint = ref(false)
 const form = reactive({
