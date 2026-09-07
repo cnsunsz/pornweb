@@ -76,3 +76,7 @@ export function saveProgress(id, data) {
 export function getContinue() {
   return api.get('/media/continue')
 }
+
+export function scrapeMedia(id, data = {}) {
+  return api.post(`/media/${id}/scrape`, data)
+}

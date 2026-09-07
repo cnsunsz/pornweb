@@ -48,6 +48,7 @@
               {{ t('media.play') }}
             </el-button>
             <el-button v-if="savedPos>0" size="large" @click="play">{{ t('media.resume', { time: fmtTime(savedPos) }) }}</el-button>
+            <el-button v-if="auth.isAdmin" size="large" :loading="scraping" @click="doScrape">{{ t('media.scrape') }}</el-button>
           </div>
           <div v-if="parts.length>1" class="parts">
             <button
@@ -88,7 +89,10 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useMediaStore } from '@/stores/media'
-import { getStreamUrl, getPosterUrl, getFanartUrl, getMediaList } from '@/api/media'
+import { getStreamUrl, getPosterUrl, getFanartUrl, getMediaList, scrapeMedia } from '@/api/media'
+import { useAuthStore } from '@/stores/auth'
+import { ElMessage } from 'element-plus'
+import { apiError } from '@/i18n'
 import { Loading } from '@element-plus/icons-vue'
 import VideoPlayer from '@/components/VideoPlayer.vue'
 import MediaCard from '@/components/MediaCard.vue'
@@ -97,10 +101,12 @@ const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const store = useMediaStore()
+const auth = useAuthStore()
 const item = ref(null)
 const playing = ref(false)
 const partIndex = ref(0)
 const related = ref([])
+const scraping = ref(false)
 
 const parts = computed(() => item.value?.extra_files || [])
 const streamUrl = computed(() => item.value ? getStreamUrl(item.value.id, partIndex.value) : '')
@@ -153,6 +159,23 @@ async function loadRelated() {
 
 onMounted(load)
 watch(() => route.params.id, load)
+
+
+async function doScrape() {
+  if (!item.value) return
+  scraping.value = true
+  try {
+    const res = await scrapeMedia(item.value.id, { force: false })
+    const data = res.data || {}
+    if (data.item) item.value = data.item
+    if ((data.changed || []).length) ElMessage.success(t('media.scrapeOk'))
+    else ElMessage.info(t('media.scrapeNone'))
+  } catch (e) {
+    ElMessage.error(apiError(e, t) || t('media.scrapeFail'))
+  } finally {
+    scraping.value = false
+  }
+}
 
 function play() { playing.value = true }
 function playPart(i) { partIndex.value = i; playing.value = true }

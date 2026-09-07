@@ -12,7 +12,11 @@ from .deps import get_current_user, get_current_admin
 router = APIRouter(prefix="/api/settings", tags=["settings"])
 
 KEYS = ("HTTP_PORT", "BIND_HOST", "PUBLIC_PORT", "MEDIA_ROOT", "APP_NAME",
-        "AUTO_SCAN_ENABLED", "AUTO_SCAN_INTERVAL_MINUTES")
+        "AUTO_SCAN_ENABLED", "AUTO_SCAN_INTERVAL_MINUTES",
+        "SCRAPER_DOUBAN_ENABLED", "SCRAPER_TMDB_ENABLED", "SCRAPER_JAVDB_ENABLED",
+        "TMDB_API_KEY", "SCRAPER_ORDER",
+        "SCRAPER_DOUBAN_COOKIE", "SCRAPER_JAVDB_COOKIE", "SCRAPER_PROXY",
+        "SCRAPER_TIMEOUT_SECONDS")
 _BACKEND_ENV = Path("/www/mediavault/backend/.env")
 def _nginx_vhost() -> Path:
     d = Path("/www/server/panel/vhost/nginx")
@@ -40,6 +44,16 @@ class ServerSettings(BaseModel):
     media_root: str = ""
     auto_scan_enabled: bool = True
     auto_scan_interval_minutes: int = Field(15, ge=1, le=1440)
+    # Cloud scrapers (additive for Android / Web)
+    scraper_douban_enabled: bool = False
+    scraper_tmdb_enabled: bool = False
+    scraper_javdb_enabled: bool = False
+    tmdb_api_key: str = ""
+    scraper_order: str = "nfo,tmdb,douban,javdb"
+    scraper_douban_cookie: str = ""
+    scraper_javdb_cookie: str = ""
+    scraper_proxy: str = ""
+    scraper_timeout_seconds: float = Field(8.0, ge=2.0, le=30.0)
     env_file: str = ""
     restart_required: bool = False
 
@@ -52,6 +66,15 @@ class ServerSettingsUpdate(BaseModel):
     media_root: Optional[str] = None
     auto_scan_enabled: Optional[bool] = None
     auto_scan_interval_minutes: Optional[int] = Field(None, ge=1, le=1440)
+    scraper_douban_enabled: Optional[bool] = None
+    scraper_tmdb_enabled: Optional[bool] = None
+    scraper_javdb_enabled: Optional[bool] = None
+    tmdb_api_key: Optional[str] = None
+    scraper_order: Optional[str] = None
+    scraper_douban_cookie: Optional[str] = None
+    scraper_javdb_cookie: Optional[str] = None
+    scraper_proxy: Optional[str] = None
+    scraper_timeout_seconds: Optional[float] = Field(None, ge=2.0, le=30.0)
 
 
 
@@ -146,6 +169,18 @@ def _schedule_backend_restart():
     threading.Timer(1.0, _go).start()
 
 
+
+def _timeout_seconds(env: dict) -> float:
+    raw = env.get("SCRAPER_TIMEOUT_SECONDS")
+    try:
+        v = float(raw) if raw not in (None, "") else float(
+            getattr(settings, "SCRAPER_TIMEOUT_SECONDS", 8.0) or 8.0
+        )
+    except (TypeError, ValueError):
+        v = 8.0
+    return max(2.0, min(30.0, v))
+
+
 def _current() -> ServerSettings:
     env = _read_env(_ENV_PATH)
     interval = env.get("AUTO_SCAN_INTERVAL_MINUTES")
@@ -166,6 +201,36 @@ def _current() -> ServerSettings:
             bool(getattr(settings, "AUTO_SCAN_ENABLED", True)),
         ),
         auto_scan_interval_minutes=max(1, min(1440, interval_i)),
+        scraper_douban_enabled=_env_bool(
+            env.get("SCRAPER_DOUBAN_ENABLED"),
+            bool(getattr(settings, "SCRAPER_DOUBAN_ENABLED", False)),
+        ),
+        scraper_tmdb_enabled=_env_bool(
+            env.get("SCRAPER_TMDB_ENABLED"),
+            bool(getattr(settings, "SCRAPER_TMDB_ENABLED", False)),
+        ),
+        scraper_javdb_enabled=_env_bool(
+            env.get("SCRAPER_JAVDB_ENABLED"),
+            bool(getattr(settings, "SCRAPER_JAVDB_ENABLED", False)),
+        ),
+        tmdb_api_key=env.get("TMDB_API_KEY")
+            if env.get("TMDB_API_KEY") is not None
+            else (getattr(settings, "TMDB_API_KEY", "") or ""),
+        scraper_order=(
+            env.get("SCRAPER_ORDER")
+            or getattr(settings, "SCRAPER_ORDER", None)
+            or "nfo,tmdb,douban,javdb"
+        ),
+        scraper_douban_cookie=env.get("SCRAPER_DOUBAN_COOKIE")
+            if env.get("SCRAPER_DOUBAN_COOKIE") is not None
+            else (getattr(settings, "SCRAPER_DOUBAN_COOKIE", "") or ""),
+        scraper_javdb_cookie=env.get("SCRAPER_JAVDB_COOKIE")
+            if env.get("SCRAPER_JAVDB_COOKIE") is not None
+            else (getattr(settings, "SCRAPER_JAVDB_COOKIE", "") or ""),
+        scraper_proxy=env.get("SCRAPER_PROXY")
+            if env.get("SCRAPER_PROXY") is not None
+            else (getattr(settings, "SCRAPER_PROXY", "") or ""),
+        scraper_timeout_seconds=_timeout_seconds(env),
         env_file=str(_ENV_PATH),
         restart_required=False,
     )
@@ -219,6 +284,46 @@ async def update_settings(req: ServerSettingsUpdate, admin: User = Depends(get_c
     if req.auto_scan_interval_minutes is not None:
         updates["AUTO_SCAN_INTERVAL_MINUTES"] = str(req.auto_scan_interval_minutes)
         cur.auto_scan_interval_minutes = req.auto_scan_interval_minutes
+    if req.scraper_douban_enabled is not None:
+        updates["SCRAPER_DOUBAN_ENABLED"] = "true" if req.scraper_douban_enabled else "false"
+        cur.scraper_douban_enabled = req.scraper_douban_enabled
+    if req.scraper_tmdb_enabled is not None:
+        updates["SCRAPER_TMDB_ENABLED"] = "true" if req.scraper_tmdb_enabled else "false"
+        cur.scraper_tmdb_enabled = req.scraper_tmdb_enabled
+    if req.scraper_javdb_enabled is not None:
+        updates["SCRAPER_JAVDB_ENABLED"] = "true" if req.scraper_javdb_enabled else "false"
+        cur.scraper_javdb_enabled = req.scraper_javdb_enabled
+    if req.tmdb_api_key is not None:
+        key = req.tmdb_api_key.strip()
+        updates["TMDB_API_KEY"] = key
+        cur.tmdb_api_key = key
+    if req.scraper_order is not None:
+        order = (req.scraper_order or "").strip() or "nfo,tmdb,douban,javdb"
+        # Normalize: keep known tokens only, preserve nfo + provider order
+        allowed = {"nfo", "tmdb", "douban", "javdb"}
+        parts = [p.strip().lower() for p in order.split(",") if p.strip()]
+        parts = [p for p in parts if p in allowed]
+        if "nfo" not in parts:
+            parts = ["nfo"] + parts
+        if not any(p != "nfo" for p in parts):
+            parts = ["nfo", "tmdb", "douban", "javdb"]
+        order = ",".join(parts)
+        updates["SCRAPER_ORDER"] = order
+        cur.scraper_order = order
+    if req.scraper_douban_cookie is not None:
+        updates["SCRAPER_DOUBAN_COOKIE"] = req.scraper_douban_cookie.strip()
+        cur.scraper_douban_cookie = req.scraper_douban_cookie.strip()
+    if req.scraper_javdb_cookie is not None:
+        updates["SCRAPER_JAVDB_COOKIE"] = req.scraper_javdb_cookie.strip()
+        cur.scraper_javdb_cookie = req.scraper_javdb_cookie.strip()
+    if req.scraper_proxy is not None:
+        updates["SCRAPER_PROXY"] = req.scraper_proxy.strip()
+        cur.scraper_proxy = req.scraper_proxy.strip()
+    if req.scraper_timeout_seconds is not None:
+        updates["SCRAPER_TIMEOUT_SECONDS"] = str(req.scraper_timeout_seconds)
+        cur.scraper_timeout_seconds = float(req.scraper_timeout_seconds)
+    if cur.scraper_tmdb_enabled and not (cur.tmdb_api_key or "").strip():
+        raise HTTPException(400, "启用 TMDB 刮削时需要填写 TMDB_API_KEY")
     if updates:
         _write_env_all(updates)
         # Hot-apply auto-scan runtime without requiring restart
@@ -228,6 +333,11 @@ async def update_settings(req: ServerSettingsUpdate, admin: User = Depends(get_c
                 enabled=cur.auto_scan_enabled,
                 interval_minutes=cur.auto_scan_interval_minutes,
             )
+        except Exception:
+            pass
+        try:
+            from ..services.scrapers import apply_live_config
+            apply_live_config(updates)
         except Exception:
             pass
     if restart:

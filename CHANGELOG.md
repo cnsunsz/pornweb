@@ -1,5 +1,19 @@
 # Changelog
 
+## v2.1.0
+### 新增
+- **可选云端刮削**：豆瓣（Douban）、TMDB、JavDB。本地 NFO 优先；元数据不足时在扫库 `scrape` 阶段或单片刷新时补全
+- 服务器设置页「云端刮削」：开关、TMDB API Key、优先级顺序、可选代理；写入 `.env` 并可热更新
+- 单片接口 `POST /api/media/{id}/scrape`（可选 `{ providers?, force? }`），供 Web / Android 调用
+- 详情页管理员「刮削元数据」按钮；扫库进度新增 `scrape` 阶段文案（简中 / 繁中 / English / 日本語）
+
+### 说明
+- TMDB 启用时必须配置 `TMDB_API_KEY`；豆瓣 / JavDB 为 best-effort，超时或风控时软跳过，不阻塞整库扫描
+- 可选 `SCRAPER_DOUBAN_COOKIE` / `SCRAPER_JAVDB_COOKIE` / `SCRAPER_PROXY`（高级，默认空）
+- 优先级默认 `SCRAPER_ORDER=nfo,tmdb,douban,javdb`；合并策略为补空字段（`force=true` 可覆盖）
+- 打包仍避免 element-plus 单独 `manualChunks`；入口不加 `?v=`
+
+
 ## v2.0.1
 ### 改进
 - **品牌字标重设计**：去掉 Pornhub 式「白字 + 橙底黑字 Web」克隆；改为独立 PornWeb 标识（圆角媒体框 + 播放三角 + 网络节点图标，字标 Web 用强调色下划线）

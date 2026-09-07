@@ -180,6 +180,7 @@ function phaseText(st) {
   const map = {
     discover: 'lib.phaseDiscover',
     metadata: 'lib.phaseMetadata',
+    scrape: 'lib.phaseScrape',
     cleanup: 'lib.phaseCleanup',
     done: 'lib.phaseDone',
   }
@@ -194,7 +195,7 @@ function scanPercent(st) {
   const found = Number(st.found) || 0
   const processed = Number(st.processed) || 0
   // Metadata phase: processed climbs 1..found — show determinate bar.
-  if (st.phase === 'metadata' && found > 0) {
+  if ((st.phase === 'metadata' || st.phase === 'scrape') && found > 0) {
     return Math.min(100, Math.round((processed / found) * 100))
   }
   // Discover: counts grow but we don't know total yet → indeterminate.

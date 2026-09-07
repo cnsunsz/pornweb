@@ -70,6 +70,39 @@
           </el-form>
         </el-card>
 
+
+        <el-card style="margin-top:16px">
+          <template #header><span class="ch">{{ t('dash.cloudScrape') }}</span></template>
+          <p class="sub-hint">{{ t('dash.cloudScrapeHint') }}</p>
+          <el-form label-width="160px" style="max-width:640px">
+            <el-form-item :label="t('dash.scraperTmdb')">
+              <el-switch v-model="form.scraper_tmdb_enabled" />
+              <span class="note">{{ t('dash.scraperTmdbHint') }}</span>
+            </el-form-item>
+            <el-form-item :label="t('dash.tmdbApiKey')">
+              <el-input v-model="form.tmdb_api_key" type="password" show-password :placeholder="t('dash.tmdbApiKeyPh')" style="max-width:360px" />
+            </el-form-item>
+            <el-form-item :label="t('dash.scraperDouban')">
+              <el-switch v-model="form.scraper_douban_enabled" />
+              <span class="note">{{ t('dash.scraperDoubanHint') }}</span>
+            </el-form-item>
+            <el-form-item :label="t('dash.scraperJavdb')">
+              <el-switch v-model="form.scraper_javdb_enabled" />
+              <span class="note">{{ t('dash.scraperJavdbHint') }}</span>
+            </el-form-item>
+            <el-form-item :label="t('dash.scraperOrder')">
+              <el-input v-model="form.scraper_order" :placeholder="t('dash.scraperOrderPh')" style="max-width:360px" />
+              <span class="note">{{ t('dash.scraperOrderHint') }}</span>
+            </el-form-item>
+            <el-form-item :label="t('dash.scraperProxy')">
+              <el-input v-model="form.scraper_proxy" :placeholder="t('dash.scraperProxyPh')" style="max-width:360px" />
+            </el-form-item>
+            <el-form-item>
+              <el-button type="primary" :loading="saving" @click="saveServer">{{ t('dash.save') }}</el-button>
+            </el-form-item>
+          </el-form>
+        </el-card>
+
         <el-alert v-if="restartHint" :title="t('dash.restartAlert')" type="warning" show-icon style="margin-top:16px" />
       </div>
 
@@ -232,6 +265,15 @@ const form = reactive({
   media_root: '',
   auto_scan_enabled: true,
   auto_scan_interval_minutes: 15,
+  scraper_douban_enabled: false,
+  scraper_tmdb_enabled: false,
+  scraper_javdb_enabled: false,
+  tmdb_api_key: '',
+  scraper_order: 'nfo,tmdb,douban,javdb',
+  scraper_douban_cookie: '',
+  scraper_javdb_cookie: '',
+  scraper_proxy: '',
+  scraper_timeout_seconds: 8,
   env_file: ''
 })
 
@@ -284,7 +326,13 @@ async function saveServer() {
       media_root: form.media_root,
       app_name: form.app_name,
       auto_scan_enabled: form.auto_scan_enabled,
-      auto_scan_interval_minutes: form.auto_scan_interval_minutes
+      auto_scan_interval_minutes: form.auto_scan_interval_minutes,
+      scraper_douban_enabled: form.scraper_douban_enabled,
+      scraper_tmdb_enabled: form.scraper_tmdb_enabled,
+      scraper_javdb_enabled: form.scraper_javdb_enabled,
+      tmdb_api_key: form.tmdb_api_key,
+      scraper_order: form.scraper_order,
+      scraper_proxy: form.scraper_proxy
     })
     Object.assign(form, res.data)
     restartHint.value = !!res.data.restart_required

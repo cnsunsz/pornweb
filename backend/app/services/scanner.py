@@ -155,7 +155,7 @@ class _ThrottledProgress:
             return
         phase = info.get("phase")
         force = (
-            phase in ("done", "cleanup", "error")
+            phase in ("done", "cleanup", "error", "scrape")
             or info.get("error")
             or (phase is not None and phase != self._last_phase)
         )
@@ -452,6 +452,72 @@ def scan_directory(
             except Exception:
                 pass
 
+    # ── Phase 3: optional cloud scrapers (soft-fail, never hang whole scan) ─
+    scraped = 0
+    try:
+        from ..services.scrapers import (
+            any_scraper_enabled,
+            get_scraper_config,
+            is_meta_thin,
+            scrape_for_item,
+        )
+        cfg = get_scraper_config()
+        do_scrape = any_scraper_enabled(cfg)
+    except Exception:
+        do_scrape = False
+        cfg = None
+        is_meta_thin = None  # type: ignore
+        scrape_for_item = None  # type: ignore
+
+    if do_scrape and pending_meta:
+        scrape_targets = []
+        for work in pending_meta:
+            item = work["item"]
+            try:
+                if is_meta_thin(item):
+                    scrape_targets.append(item)
+            except Exception:
+                continue
+        scrape_total = len(scrape_targets)
+        notify({
+            "phase": "scrape",
+            "found": total_found,
+            "added": added,
+            "updated": updated,
+            "processed": 0,
+            "message": f"正在云端刮削（0/{scrape_total}）",
+        })
+        for idx, item in enumerate(scrape_targets, start=1):
+            display = (item.title or item.filename or "")[:80]
+            notify({
+                "phase": "scrape",
+                "current": item.file_path or "",
+                "found": total_found,
+                "added": added,
+                "updated": updated,
+                "processed": idx,
+                "message": f"正在云端刮削：{display} ({idx}/{scrape_total})",
+            })
+            try:
+                summary = scrape_for_item(item, cfg=cfg, force=False)
+                if summary.get("changed"):
+                    scraped += 1
+                    item.updated_at = datetime.now(timezone.utc)
+                    db.commit()
+            except Exception:
+                try:
+                    db.rollback()
+                except Exception:
+                    pass
+        notify({
+            "phase": "scrape",
+            "found": total_found,
+            "added": added,
+            "updated": updated,
+            "processed": scrape_total,
+            "message": f"云端刮削完成：补充 {scraped}/{scrape_total}",
+        })
+
     notify({
         "phase": "cleanup",
         "message": "正在清理已删除的条目…",
@@ -494,7 +560,7 @@ def scan_directory(
         "removed": removed,
         "found": added + updated,
         "processed": added + updated,
-        "message": f"扫描完成：新增 {added}，更新 {updated}，清理 {removed}",
+        "message": f"扫描完成：新增 {added}，更新 {updated}，清理 {removed}" + (f"，刮削补充 {scraped}" if scraped else ""),
     })
     return result
 

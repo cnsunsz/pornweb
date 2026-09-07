@@ -21,6 +21,16 @@ class Settings(BaseSettings):
     # Emby-style auto library scan (watchdog + periodic safety net for rclone FUSE)
     AUTO_SCAN_ENABLED: bool = True
     AUTO_SCAN_INTERVAL_MINUTES: int = 15
+    # Optional cloud metadata scrapers (NFO first; soft-fail)
+    SCRAPER_DOUBAN_ENABLED: bool = False
+    SCRAPER_TMDB_ENABLED: bool = False
+    SCRAPER_JAVDB_ENABLED: bool = False
+    TMDB_API_KEY: str = ""
+    SCRAPER_ORDER: str = "nfo,tmdb,douban,javdb"
+    SCRAPER_DOUBAN_COOKIE: str = ""
+    SCRAPER_JAVDB_COOKIE: str = ""
+    SCRAPER_PROXY: str = ""
+    SCRAPER_TIMEOUT_SECONDS: float = 8.0
 
     class Config:
         env_file = str(_ENV_PATH)

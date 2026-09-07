@@ -471,6 +471,80 @@ async def delete_library(
     removed = delete_media_by_folder(path, db)
     return {"message": f"已删除 {removed} 个媒体条目", "removed": removed}
 
+
+class ScrapeRequest(BaseModel):
+    """Optional body for POST /api/media/{id}/scrape (Android / Web)."""
+    providers: Optional[List[str]] = None  # e.g. ["tmdb","douban","javdb"]
+    force: bool = False  # overwrite existing fields when True
+
+
+class ScrapeResponse(BaseModel):
+    ok: bool = True
+    skipped: bool = False
+    reason: Optional[str] = None
+    changed: List[str] = []
+    providers_tried: List[str] = []
+    providers_used: List[str] = []
+    provider: str = ""
+    item: Optional[MediaResponse] = None
+
+
+@router.post("/{media_id}/scrape", response_model=ScrapeResponse)
+async def scrape_media(
+    media_id: int,
+    req: Optional[ScrapeRequest] = None,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Cloud metadata scrape for one title. Soft-fails; prefers filling empty fields.
+
+    Body (all optional): `{ "providers": ["tmdb","douban","javdb"], "force": false }`
+    When `providers` omitted, uses enabled scrapers in `SCRAPER_ORDER`.
+    """
+    from ..services.scrapers import scrape_for_item
+
+    item = db.execute(select(MediaItem).where(MediaItem.id == media_id)).scalar_one_or_none()
+    if not item:
+        raise HTTPException(status_code=404, detail="媒体不存在")
+    body = req or ScrapeRequest()
+    try:
+        summary = scrape_for_item(
+            item,
+            providers=body.providers,
+            force=bool(body.force),
+        )
+        if summary.get("changed"):
+            from datetime import datetime, timezone
+            item.updated_at = datetime.now(timezone.utc)
+            db.commit()
+            db.refresh(item)
+        else:
+            try:
+                db.rollback()
+            except Exception:
+                pass
+    except Exception as exc:
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        raise HTTPException(status_code=502, detail=f"刮削失败: {exc}")
+
+    prow = db.execute(select(PlaybackProgress).where(
+        PlaybackProgress.user_id == user.id, PlaybackProgress.media_id == media_id
+    )).scalar_one_or_none()
+    return ScrapeResponse(
+        ok=True,
+        skipped=bool(summary.get("skipped")),
+        reason=summary.get("reason"),
+        changed=list(summary.get("changed") or []),
+        providers_tried=list(summary.get("providers_tried") or []),
+        providers_used=list(summary.get("providers_used") or []),
+        provider=summary.get("provider") or "",
+        item=_to_response(item, prow),
+    )
+
+
 @router.delete("/{media_id}")
 async def delete_media(
     media_id: int,
