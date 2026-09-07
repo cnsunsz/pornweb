@@ -2,7 +2,13 @@
   <el-config-provider :locale="elLocale">
     <div class="app-container">
       <AppHeader v-if="authStore.isLoggedIn" />
-      <main class="app-main" :class="{ 'app-main-wide': $route.path.startsWith('/settings') }">
+      <main
+        class="app-main"
+        :class="{
+          'app-main-wide': $route.path.startsWith('/settings'),
+          'app-main-auth': !authStore.isLoggedIn,
+        }"
+      >
         <router-view />
       </main>
     </div>
@@ -34,16 +40,24 @@ const elLocale = computed(() => ({
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+  background: var(--bg);
 }
 .app-main {
   flex: 1;
-  padding: 20px;
-  max-width: 1400px;
+  padding: 14px 16px 28px;
+  max-width: 1680px;
   margin: 0 auto;
   width: 100%;
 }
 .app-main-wide {
   max-width: 100%;
   padding: 0;
+}
+.app-main-auth {
+  max-width: 100%;
+  padding: 0;
+}
+@media (min-width: 900px) {
+  .app-main { padding: 16px 20px 36px; }
 }
 </style>

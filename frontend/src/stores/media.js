@@ -6,7 +6,7 @@ export const useMediaStore = defineStore('media', () => {
   const items = ref([])
   const total = ref(0)
   const page = ref(1)
-  const pageSize = ref(20)
+  const pageSize = ref(48)
   const loading = ref(false)
   const genres = ref([])
   const currentDetail = ref(null)

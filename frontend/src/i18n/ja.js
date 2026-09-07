@@ -1,5 +1,5 @@
 export default {
-  nav: { home: 'ホーム', actors: '出演者', console: 'ダッシュボード', settings: '設定', logout: 'ログアウト' },
+  nav: { home: 'ホーム', actors: '出演者', libraries: 'カテゴリ', console: 'ダッシュボード', settings: '設定', logout: 'ログアウト' },
   auth: {
     loginTitle: 'アカウントにログイン',
     registerTitle: 'アカウントを作成',
@@ -27,9 +27,12 @@ export default {
   home: {
     continue: '続きから再生',
     libraries: 'メディアライブラリ',
-    latest: '最新',
+    latest: '最新 / おすすめ',
+    all: 'すべて',
     items: '{n} 件',
     search: '検索',
+    searchPh: 'タイトル・ファイル名を検索…',
+    searchResults: '検索：{q}',
     type: '種類',
     movie: '映画',
     show: 'シリーズ',
@@ -57,6 +60,7 @@ export default {
     cast: '出演',
     plot: 'あらすじ',
     part: 'パート {n}',
+    related: '関連動画',
   },
   player: {
     back: '戻る', play: '再生', pause: '一時停止', back10: '10秒戻る', fwd10: '10秒進む',

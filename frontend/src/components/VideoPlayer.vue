@@ -684,7 +684,7 @@ function formatTime(s) {
 }
 .speed-badge {
   position: absolute; top: 18%; right: 8%;
-  background: rgba(229,9,20,.85); color: #fff; padding: 6px 12px; border-radius: 6px;
+  background: rgba(255,163,26,.92); color: #fff; padding: 6px 12px; border-radius: 6px;
   font-size: 16px; font-weight: 700; pointer-events: none; z-index: 5;
 }
 
@@ -723,11 +723,11 @@ function formatTime(s) {
 }
 .progress-played {
   position: absolute; top: 0; left: 0; height: 100%;
-  background: #e50914; border-radius: 2px;
+  background: var(--accent); border-radius: 2px;
 }
 .progress-thumb {
   position: absolute; right: -6px; top: 50%; transform: translateY(-50%);
-  width: 14px; height: 14px; background: #e50914; border-radius: 50%;
+  width: 14px; height: 14px; background: var(--accent); border-radius: 50%;
   opacity: 0; transition: opacity 0.1s;
 }
 .progress-container:hover .progress-thumb { opacity: 1; }
@@ -749,7 +749,7 @@ function formatTime(s) {
   border-radius: 4px; transition: background 0.15s;
 }
 .icon-btn:hover { background: rgba(255,255,255,0.15); }
-.icon-btn.active { color: #e50914; }
+.icon-btn.active { color: var(--accent); }
 
 .volume-group { display: flex; align-items: center; gap: 2px; }
 .volume-slider-wrap { width: 0; overflow: hidden; transition: width 0.2s; }

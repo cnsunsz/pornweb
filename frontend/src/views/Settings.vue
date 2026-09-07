@@ -311,7 +311,7 @@ async function changePw() {
 <style scoped>
 .dash { display:flex; gap:0; min-height:calc(100vh - 56px); }
 .side {
-  width: 220px; flex-shrink:0; background: #141414; border-right:1px solid var(--border);
+  width: 220px; flex-shrink:0; background: #0e0e0e; border-right:1px solid var(--border);
   padding: 20px 10px;
 }
 .side-title { font-size:11px; letter-spacing:.08em; color:var(--text-muted); padding:12px 12px 6px; text-transform:uppercase; }
@@ -320,7 +320,7 @@ async function changePw() {
   padding:10px 12px; border-radius:6px; cursor:pointer; font-size:14px;
 }
 .side-item:hover { background:var(--bg-hover); color:var(--text); }
-.side-item.on { background: rgba(0,164,220,.15); color: var(--accent); font-weight:600; }
+.side-item.on { background: var(--accent-soft); color: var(--accent); font-weight:700; }
 .pane { flex:1; padding: 24px 28px; overflow:auto; }
 .pane h2 { font-size:22px; margin-bottom:8px; }
 .hint { color:var(--text-dim); font-size:13px; margin-bottom:16px; }
@@ -336,7 +336,7 @@ async function changePw() {
   padding: 8px 14px; border-radius: 999px; cursor: pointer; font-size: 13px; font-weight: 600;
 }
 .chip:hover { border-color: var(--accent); color: var(--text); }
-.chip.on { background: rgba(0,164,220,.18); border-color: var(--accent); color: var(--accent); }
+.chip.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
 
 .switch-list { display:flex; flex-direction:column; }
 .switch-row {

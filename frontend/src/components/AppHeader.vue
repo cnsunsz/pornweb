@@ -1,24 +1,28 @@
 <template>
   <header class="header">
     <div class="header-inner">
-      <router-link to="/" class="logo">
-        <svg viewBox="0 0 24 24" width="28" height="28"><path d="M8 5v14l11-7z" fill="var(--accent)"/></svg>
-        <span>PornWeb</span>
+      <router-link to="/" class="logo" :aria-label="'PornWeb'">
+        <span class="logo-porn">Porn</span><span class="logo-web">Web</span>
       </router-link>
 
+      <form class="search-wrap" @submit.prevent="goSearch">
+        <input
+          v-model="q"
+          class="search-input"
+          type="search"
+          :placeholder="t('home.searchPh')"
+          autocomplete="off"
+        />
+        <button type="submit" class="search-btn" :title="t('home.search')">
+          <svg viewBox="0 0 24 24" width="18" height="18"><path d="M15.5 14h-.79l-.28-.27A6.47 6.47 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z" fill="currentColor"/></svg>
+        </button>
+      </form>
+
       <nav class="nav">
-        <router-link to="/" class="nav-item" :class="{active: $route.path==='/'}">
-          <svg viewBox="0 0 24 24" width="20" height="20"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" fill="currentColor"/></svg>
-          <span>{{ t('nav.home') }}</span>
-        </router-link>
-        <router-link to="/actors" class="nav-item" :class="{active: $route.path.startsWith('/actors')}">
-          <svg viewBox="0 0 24 24" width="20" height="20"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" fill="currentColor"/></svg>
-          <span>{{ t('nav.actors') }}</span>
-        </router-link>
-        <router-link v-if="auth.isAdmin" to="/settings?tab=server" class="nav-item" :class="{active: $route.path==='/settings'}">
-          <svg viewBox="0 0 24 24" width="20" height="20"><path d="M19.14 12.94c.04-.31.06-.63.06-.94 0-.31-.02-.63-.06-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.49.49 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94L14.4 2.81a.47.47 0 0 0-.47-.41h-3.85a.47.47 0 0 0-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96a.49.49 0 0 0-.59.22L2.74 8.87a.48.48 0 0 0 .12.61l2.03 1.58c-.04.31-.06.63-.06-.94s.02.63.06.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.47.41h3.85c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6A3.6 3.6 0 1 1 12 8.4a3.6 3.6 0 0 1 0 7.2z" fill="currentColor"/></svg>
-          <span>{{ t('nav.console') }}</span>
-        </router-link>
+        <router-link to="/" class="nav-item" :class="{active: $route.path==='/'}">{{ t('nav.home') }}</router-link>
+        <router-link to="/actors" class="nav-item" :class="{active: $route.path.startsWith('/actors')}">{{ t('nav.actors') }}</router-link>
+        <router-link v-if="auth.isAdmin" to="/settings?tab=libraries" class="nav-item" :class="{active: $route.path==='/settings' && ($route.query.tab==='libraries' || !$route.query.tab)}">{{ t('nav.libraries') }}</router-link>
+        <router-link v-if="auth.isAdmin" to="/settings?tab=server" class="nav-item" :class="{active: $route.path==='/settings' && $route.query.tab==='server'}">{{ t('nav.console') }}</router-link>
       </nav>
 
       <el-dropdown trigger="click" @command="onCommand">
@@ -38,13 +42,25 @@
 </template>
 
 <script setup>
-import { useRouter } from 'vue-router'
+import { ref, watch } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 
 const { t } = useI18n()
 const router = useRouter()
+const route = useRoute()
 const auth = useAuthStore()
+const q = ref(typeof route.query.q === 'string' ? route.query.q : '')
+
+watch(() => route.query.q, (v) => {
+  q.value = typeof v === 'string' ? v : ''
+})
+
+function goSearch() {
+  const term = q.value.trim()
+  router.push({ path: '/', query: term ? { q: term } : {} })
+}
 
 function onCommand(cmd) {
   if (cmd === 'logout') { auth.logout(); router.push('/login') }
@@ -54,29 +70,117 @@ function onCommand(cmd) {
 
 <style scoped>
 .header {
-  background: rgba(16,16,16,0.95); backdrop-filter: blur(12px);
-  border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 100;
+  background: #0a0a0a;
+  border-bottom: 1px solid #1f1f1f;
+  position: sticky;
+  top: 0;
+  z-index: 100;
 }
 .header-inner {
-  max-width: 1400px; margin: 0 auto; display: flex; align-items: center;
-  padding: 0 24px; height: 56px; gap: 24px;
+  max-width: 1680px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  padding: 0 14px;
+  height: var(--header-h);
+  gap: 12px;
 }
 .logo {
-  display: flex; align-items: center; gap: 8px; font-size: 18px; font-weight: 700;
-  color: var(--accent); white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+  line-height: 1;
+  flex-shrink: 0;
 }
-.nav { display: flex; gap: 2px; flex: 1; }
+.logo-porn { color: #fff; }
+.logo-web {
+  background: var(--accent);
+  color: #111;
+  padding: 3px 7px 4px;
+  margin-left: 1px;
+  border-radius: 3px;
+  font-weight: 900;
+}
+.search-wrap {
+  display: flex;
+  flex: 1;
+  max-width: 420px;
+  min-width: 0;
+  height: 34px;
+  border: 1px solid #333;
+  border-radius: 4px;
+  overflow: hidden;
+  background: #151515;
+}
+.search-wrap:focus-within { border-color: var(--accent); }
+.search-input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  padding: 0 10px;
+  font-size: 13px;
+  outline: none;
+}
+.search-btn {
+  width: 40px;
+  border: 0;
+  background: #222;
+  color: #ccc;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.search-btn:hover { background: var(--accent); color: #111; }
+.nav {
+  display: flex;
+  gap: 2px;
+  flex-shrink: 0;
+  margin-left: auto;
+}
 .nav-item {
-  display: flex; align-items: center; gap: 6px; padding: 8px 14px;
-  border-radius: 6px; color: var(--text-dim); font-size: 14px; transition: all 0.15s;
+  padding: 7px 10px;
+  border-radius: 4px;
+  color: var(--text-dim);
+  font-size: 13px;
+  font-weight: 600;
+  transition: color 0.12s, background 0.12s;
+  white-space: nowrap;
 }
-.nav-item:hover, .nav-item.active { color: var(--text); background: var(--bg-hover); }
+.nav-item:hover { color: var(--text); background: var(--bg-hover); }
+.nav-item.active { color: var(--accent); }
 .user-btn {
-  display: flex; align-items: center; gap: 8px; cursor: pointer; color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  color: var(--text);
+  flex-shrink: 0;
 }
 .avatar {
-  width: 30px; height: 30px; border-radius: 50%; background: var(--bg-hover);
-  display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #111;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 800;
 }
-.name { font-size: 14px; }
+.name { font-size: 13px; max-width: 100px; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 820px) {
+  .name { display: none; }
+  .nav-item { padding: 7px 8px; font-size: 12px; }
+  .search-wrap { max-width: none; }
+}
+@media (max-width: 560px) {
+  .nav { display: none; }
+}
 </style>

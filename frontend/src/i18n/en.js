@@ -1,5 +1,5 @@
 export default {
-  nav: { home: 'Home', actors: 'Actors', console: 'Dashboard', settings: 'Settings', logout: 'Sign out' },
+  nav: { home: 'Home', actors: 'Actors', libraries: 'Categories', console: 'Dashboard', settings: 'Settings', logout: 'Sign out' },
   auth: {
     loginTitle: 'Sign in to your account',
     registerTitle: 'Create an account',
@@ -27,9 +27,12 @@ export default {
   home: {
     continue: 'Continue watching',
     libraries: 'My media',
-    latest: 'Latest',
+    latest: 'Latest / Featured',
+    all: 'All',
     items: '{n} items',
     search: 'Search',
+    searchPh: 'Search titles, filenames…',
+    searchResults: 'Search: {q}',
     type: 'Type',
     movie: 'Movies',
     show: 'Shows',
@@ -57,6 +60,7 @@ export default {
     cast: 'Cast',
     plot: 'Overview',
     part: 'Part {n}',
+    related: 'Related',
   },
   player: {
     back: 'Back', play: 'Play', pause: 'Pause', back10: 'Back 10s', fwd10: 'Forward 10s',

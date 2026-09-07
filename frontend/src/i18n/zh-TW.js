@@ -1,5 +1,5 @@
 export default {
-  nav: { home: '首頁', actors: '演員', console: '控制台', settings: '設定', logout: '登出' },
+  nav: { home: '首頁', actors: '演員', libraries: '分類', console: '控制台', settings: '設定', logout: '登出' },
   auth: {
     loginTitle: '登入您的帳戶',
     registerTitle: '建立新帳戶',
@@ -27,9 +27,12 @@ export default {
   home: {
     continue: '繼續觀看',
     libraries: '我的媒體庫',
-    latest: '最新內容',
+    latest: '最新 / 推薦',
+    all: '全部',
     items: '{n} 個項目',
     search: '搜尋',
+    searchPh: '搜尋標題、檔名…',
+    searchResults: '搜尋：{q}',
     type: '類型',
     movie: '電影',
     show: '劇集',
@@ -57,6 +60,7 @@ export default {
     cast: '演員',
     plot: '劇情簡介',
     part: '分段 {n}',
+    related: '相關推薦',
   },
   player: {
     back: '返回', play: '播放', pause: '暫停', back10: '後退 10 秒', fwd10: '前進 10 秒',

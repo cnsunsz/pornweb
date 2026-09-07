@@ -1,5 +1,5 @@
 export default {
-  nav: { home: '首页', actors: '演员', console: '控制台', settings: '设置', logout: '退出登录' },
+  nav: { home: '首页', actors: '演员', libraries: '分类', console: '控制台', settings: '设置', logout: '退出登录' },
   auth: {
     loginTitle: '登录您的账户',
     registerTitle: '创建新账户',
@@ -27,9 +27,12 @@ export default {
   home: {
     continue: '继续观看',
     libraries: '我的媒体库',
-    latest: '最新内容',
+    latest: '最新 / 推荐',
+    all: '全部',
     items: '{n} 个项目',
     search: '搜索',
+    searchPh: '搜索标题、文件名…',
+    searchResults: '搜索：{q}',
     type: '类型',
     movie: '电影',
     show: '剧集',
@@ -57,6 +60,7 @@ export default {
     cast: '演员',
     plot: '剧情简介',
     part: '分段 {n}',
+    related: '相关推荐',
   },
   player: {
     back: '返回',

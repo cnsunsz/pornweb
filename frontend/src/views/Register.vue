@@ -2,8 +2,7 @@
   <div class="auth-page">
     <div class="auth-card">
       <div class="auth-logo">
-        <svg viewBox="0 0 24 24" width="48" height="48"><path d="M8 5v14l11-7z" fill="var(--accent)"/></svg>
-        <h1>PornWeb</h1>
+        <div class="wordmark"><span class="p">Porn</span><span class="w">Web</span></div>
         <p>{{ t('auth.registerTitle') }}</p>
       </div>
       <el-form ref="formRef" :model="f" :rules="rules" @submit.prevent="submit">
@@ -51,10 +50,34 @@ async function submit() {
 }
 </script>
 <style scoped>
-.auth-page { min-height:100vh; display:flex; align-items:center; justify-content:center; background: radial-gradient(ellipse at top, #101010, #000); }
-.auth-card { width:380px; padding:40px; background:var(--bg-card); border:1px solid var(--border); border-radius:12px; }
-.auth-logo { text-align:center; margin-bottom:28px; }
-.auth-logo h1 { margin:12px 0 4px; font-size:22px; }
-.auth-logo p { color:var(--text-dim); font-size:14px; }
-.auth-link { text-align:center; margin-top:16px; font-size:14px; color:var(--text-dim); }
+.auth-page {
+  min-height: 100vh;
+  display: flex; align-items: center; justify-content: center;
+  background:
+    radial-gradient(ellipse at 30% 0%, rgba(255,163,26,0.12), transparent 50%),
+    radial-gradient(ellipse at 70% 100%, rgba(255,163,26,0.06), transparent 45%),
+    #050505;
+  padding: 24px;
+}
+.auth-card {
+  width: 400px; max-width: 100%;
+  padding: 36px 32px;
+  background: #121212;
+  border: 1px solid #2a2a2a;
+  border-radius: 8px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.55);
+}
+.auth-logo { text-align: center; margin-bottom: 28px; }
+.wordmark {
+  display: inline-flex; align-items: center;
+  font-size: 32px; font-weight: 900; letter-spacing: -0.02em; line-height: 1;
+}
+.wordmark .p { color: #fff; }
+.wordmark .w {
+  background: var(--accent); color: #111;
+  padding: 4px 8px 5px; margin-left: 2px; border-radius: 4px;
+}
+.auth-logo p { color: var(--text-dim); font-size: 14px; margin-top: 14px; }
+.auth-link { text-align: center; margin-top: 18px; font-size: 14px; color: var(--text-dim); }
+.auth-link a { margin-left: 6px; font-weight: 700; }
 </style>

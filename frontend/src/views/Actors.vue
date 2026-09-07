@@ -18,7 +18,7 @@
         </div>
       </div>
 
-      <div v-if="works.length" class="grid">
+      <div v-if="works.length" class="tube-grid">
         <MediaCard v-for="item in works" :key="item.id" :item="item" @click="goMedia(item)" />
       </div>
       <div v-else-if="!loading" class="empty">
@@ -209,35 +209,36 @@ onMounted(() => {
   margin-bottom: 14px; flex-wrap: wrap; gap: 10px;
 }
 .title-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.section-title { font-size: 20px; font-weight: 700; margin: 0; }
+.section-title { font-size: 18px; font-weight: 800; margin: 0; }
 .count { color: var(--text-dim); font-size: 13px; }
 .filters { display: flex; gap: 8px; align-items: center; }
 .actor-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  gap: 10px 8px;
 }
 .actor-card {
-  cursor: pointer; border-radius: 8px; overflow: hidden;
-  background: var(--bg-card); transition: transform 0.15s, box-shadow 0.15s;
+  cursor: pointer; border-radius: 4px; overflow: hidden;
+  background: var(--bg-card); transition: transform 0.12s, border-color 0.12s;
+  border: 1px solid transparent;
 }
-.actor-card:hover { transform: translateY(-2px); box-shadow: 0 6px 18px rgba(0,0,0,0.4); }
+.actor-card:hover { transform: translateY(-2px); border-color: var(--accent); }
 .thumb {
-  aspect-ratio: 2/3; background: #1a1a1a; position: relative; overflow: hidden;
+  aspect-ratio: 2/3; background: #141414; position: relative; overflow: hidden;
 }
 .thumb img { width: 100%; height: 100%; object-fit: cover; }
 .ph {
   width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;
-  font-size: 36px; font-weight: 700; color: #555;
-  background: linear-gradient(135deg, #1a1a2e, #16213e);
+  font-size: 32px; font-weight: 800; color: #555;
+  background: linear-gradient(135deg, #1a1a1a, #222);
 }
-.meta { padding: 8px 8px 10px; }
+.meta { padding: 6px 4px 8px; }
 .name {
-  font-size: 13px; font-weight: 600; white-space: nowrap;
+  font-size: 12px; font-weight: 700; white-space: nowrap;
   overflow: hidden; text-overflow: ellipsis;
 }
-.n { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
-.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 16px; }
+.actor-card:hover .name { color: var(--accent); }
+.n { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
 .empty { text-align: center; padding: 60px 20px; color: var(--text-muted); }
 .loading { display: flex; justify-content: center; padding: 40px; color: var(--accent); }
 .pager { display: flex; justify-content: center; padding: 24px 0; }
