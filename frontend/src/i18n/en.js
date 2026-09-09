@@ -74,6 +74,10 @@ export default {
     backN: 'Back {n}s',
     fwdN: 'Forward {n}s',
     settings: 'Playback settings',
+    subtitles: 'Subtitles',
+    subOff: 'Off',
+    subNone: 'No subtitles',
+    subLoading: 'Loading subtitles…',
   },
   dash: {
     title: 'Dashboard', server: 'Server', users: 'Users', libraries: 'Libraries',

@@ -82,6 +82,10 @@ export default {
     backN: '后退{n}秒',
     fwdN: '前进{n}秒',
     settings: '播放设置',
+    subtitles: '字幕',
+    subOff: '关闭字幕',
+    subNone: '无可用字幕',
+    subLoading: '加载字幕…',
   },
   dash: {
     title: '控制台',

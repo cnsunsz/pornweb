@@ -120,6 +120,25 @@
             </button>
           </div>
 
+
+          <div class="sub-group" @click.stop>
+            <button class="icon-btn" :class="{ active: !!selectedSubId }" @click="subMenuOpen = !subMenuOpen" :title="t('player.subtitles')">
+              <svg viewBox="0 0 24 24" width="22" height="22"><path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zM4 12h4v2H4v-2zm10 6H4v-2h10v2zm6 0h-4v-2h4v2zm0-4H10v-2h10v2z" fill="white"/></svg>
+            </button>
+            <div v-if="subMenuOpen" class="sub-menu">
+              <div class="sub-menu-title">{{ t('player.subtitles') }}</div>
+              <button class="sub-item" :class="{ active: !selectedSubId }" @click="selectSubtitle(null)">{{ t('player.subOff') }}</button>
+              <button
+                v-for="tr in subtitleTracks"
+                :key="tr.id"
+                class="sub-item"
+                :class="{ active: selectedSubId === tr.id }"
+                @click="selectSubtitle(tr.id)"
+              >{{ tr.label }}<span class="sub-meta">{{ tr.source === 'embedded' ? '内嵌' : '外挂' }}</span></button>
+              <div v-if="!subtitleTracks.length" class="sub-empty">{{ subLoading ? t('player.subLoading') : t('player.subNone') }}</div>
+            </div>
+          </div>
+
           <button class="icon-btn" @click.stop="togglePiP" :title="t('player.pip')">
             <svg viewBox="0 0 24 24" width="22" height="22"><path d="M19 11h-8v6h8v-6zm4 8V4.98C23 3.88 22.1 3 21 3H3c-1.1 0-2 .88-2 1.98V19c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2zm-2 .02H3V4.97h18v14.05z" fill="white"/></svg>
           </button>
@@ -138,7 +157,7 @@
 import { ref, onMounted, onUnmounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
-import { saveProgress } from '@/api/media'
+import { saveProgress, getSubtitles, getSubtitleUrl } from '@/api/media'
 import { usePlayerPrefs } from '@/composables/usePlayerPrefs'
 
 const { t } = useI18n()
@@ -597,17 +616,109 @@ function onTouchEnd(e) {
   finishPointer(e)
 }
 
+
+const subtitleTracks = ref([])
+const selectedSubId = ref(null)
+const subMenuOpen = ref(false)
+const subLoading = ref(false)
+
+function preferDefaultTrack(tracks) {
+  const rank = (lang) => {
+    const l = (lang || '').toLowerCase()
+    if (l.startsWith('zh')) return 0
+    if (l === 'en' || l.startsWith('en')) return 1
+    if (l === 'ja') return 2
+    return 9
+  }
+  const sorted = [...tracks].sort((a, b) => rank(a.language) - rank(b.language))
+  return sorted[0] || null
+}
+
+async function loadSubtitles() {
+  if (!props.mediaId) {
+    subtitleTracks.value = []
+    selectedSubId.value = null
+    applySubtitleTrack(null)
+    return
+  }
+  subLoading.value = true
+  try {
+    const { data } = await getSubtitles(props.mediaId, props.part || 0)
+    subtitleTracks.value = data?.tracks || []
+    const pref = preferDefaultTrack(subtitleTracks.value)
+    if (pref) selectSubtitle(pref.id)
+    else selectSubtitle(null)
+  } catch {
+    subtitleTracks.value = []
+    selectSubtitle(null)
+  } finally {
+    subLoading.value = false
+  }
+}
+
+function clearVideoTracks() {
+  const v = videoEl.value
+  if (!v) return
+  // Remove previously injected <track> elements
+  Array.from(v.querySelectorAll('track[data-pw-sub]')).forEach((el) => el.remove())
+  if (v.textTracks) {
+    for (let i = 0; i < v.textTracks.length; i++) {
+      try { v.textTracks[i].mode = 'disabled' } catch {}
+    }
+  }
+}
+
+function applySubtitleTrack(trackId) {
+  const v = videoEl.value
+  if (!v) return
+  clearVideoTracks()
+  if (!trackId || !props.mediaId) return
+  const url = getSubtitleUrl(props.mediaId, trackId, props.part || 0)
+  const el = document.createElement('track')
+  el.kind = 'subtitles'
+  el.label = 'PornWeb'
+  el.srclang = 'zh'
+  el.src = url
+  el.default = true
+  el.setAttribute('data-pw-sub', '1')
+  el.addEventListener('load', () => {
+    try {
+      if (el.track) el.track.mode = 'showing'
+    } catch {}
+  })
+  v.appendChild(el)
+  // Some browsers need a tick
+  setTimeout(() => {
+    try {
+      if (el.track) el.track.mode = 'showing'
+    } catch {}
+  }, 50)
+}
+
+function selectSubtitle(trackId) {
+  selectedSubId.value = trackId
+  subMenuOpen.value = false
+  applySubtitleTrack(trackId)
+}
+
 onMounted(() => {
   document.addEventListener('keydown', onKeydown)
   document.addEventListener('keyup', onKeyup)
   document.addEventListener('fullscreenchange', () => {
     isFullscreen.value = !!document.fullscreenElement
   })
+  document.addEventListener('click', onDocClick)
   showControls()
+  loadSubtitles()
 })
+function onDocClick() {
+  subMenuOpen.value = false
+}
+
 onUnmounted(() => {
   document.removeEventListener('keydown', onKeydown)
   document.removeEventListener('keyup', onKeyup)
+  document.removeEventListener('click', onDocClick)
   clearTimeout(controlsTimer)
   clearTimeout(longPressTimer)
   clearTimeout(hintTimer)
@@ -630,6 +741,11 @@ watch(() => props.src, () => {
     videoEl.value.load()
     videoEl.value.play().catch(() => {})
   }
+  loadSubtitles()
+})
+
+watch(() => [props.mediaId, props.part], () => {
+  loadSubtitles()
 })
 
 watch(() => prefs.defaultSpeed, (v) => {
@@ -771,5 +887,35 @@ function formatTime(s) {
 .speed-btn {
   color: rgba(255,255,255,0.8); font-size: 13px; font-weight: 600;
   padding: 4px 8px; min-width: 40px;
+}
+
+.sub-group { position: relative; }
+.sub-menu {
+  position: absolute; bottom: 42px; right: 0;
+  min-width: 180px; max-height: 260px; overflow: auto;
+  background: rgba(20,20,20,0.95); border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 8px; padding: 8px 0; z-index: 8;
+}
+.sub-menu-title {
+  color: rgba(255,255,255,0.55); font-size: 11px; padding: 4px 14px 8px;
+  text-transform: uppercase; letter-spacing: 0.04em;
+}
+.sub-item {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  width: 100%; background: none; border: none; color: #fff;
+  padding: 8px 14px; font-size: 13px; cursor: pointer; text-align: left;
+}
+.sub-item:hover { background: rgba(255,255,255,0.08); }
+.sub-item.active { color: var(--accent); }
+.sub-meta { color: rgba(255,255,255,0.4); font-size: 11px; }
+.sub-empty { color: rgba(255,255,255,0.45); font-size: 12px; padding: 8px 14px; }
+
+/* HTML5 cue styling */
+.player video::cue {
+  background: rgba(0,0,0,0.55);
+  color: #fff;
+  font-size: 1.05em;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.9);
+  line-height: 1.35;
 }
 </style>

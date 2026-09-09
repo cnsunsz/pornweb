@@ -72,6 +72,10 @@ export default {
     backN: '後退 {n} 秒',
     fwdN: '前進 {n} 秒',
     settings: '播放設定',
+    subtitles: '字幕',
+    subOff: '關閉字幕',
+    subNone: '無可用字幕',
+    subLoading: '載入字幕…',
   },
   dash: {
     title: '控制台', server: '伺服器', users: '使用者', libraries: '媒體庫',

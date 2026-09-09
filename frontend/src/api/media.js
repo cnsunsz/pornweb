@@ -17,6 +17,14 @@ export function getStreamUrl(id, part = 0) {
   return `/api/media/stream/${id}?token=${tokenQ()}&part=${part || 0}`
 }
 
+export function getSubtitles(id, part = 0) {
+  return api.get(`/media/subtitles/${id}`, { params: { part: part || 0 } })
+}
+
+export function getSubtitleUrl(id, trackId, part = 0) {
+  return `/api/media/subtitles/${id}/${encodeURIComponent(trackId)}?token=${tokenQ()}&part=${part || 0}`
+}
+
 export function getPosterUrl(id) {
   return `/api/media/poster/${id}?token=${tokenQ()}`
 }

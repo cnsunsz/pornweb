@@ -1,5 +1,17 @@
 # Changelog
 
+## [v2.1.9] - 2026-09-09
+
+### 新增
+- **外挂字幕识别**：同目录 / `Subs` 下 `.srt` `.ass` `.ssa` `.vtt`（含 `影片名.zh.srt` 语言标签）
+- **内嵌字幕轨列表**：有 `ffprobe` 时列出嵌入字幕（提取需 `ffmpeg`）
+- **播放器字幕选择**：网页播放器可选轨 / 关闭；默认优先中文外挂
+- API：`GET /api/media/subtitles/{id}?part=` 列表；`GET /api/media/subtitles/{id}/{track_id}?token=&part=` 返回 WebVTT
+
+### 说明
+- Android 可用同一列表接口做原生选轨；外挂可直接下文件或走 VTT 接口
+- 无 ffmpeg 时仍可用外挂 SRT/VTT/ASS（ASS 为纯文本粗转）
+
 ## [v2.1.8] - 2026-09-09
 
 ### 改进

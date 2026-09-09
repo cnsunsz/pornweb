@@ -72,6 +72,10 @@ export default {
     backN: '{n}秒戻る',
     fwdN: '{n}秒進む',
     settings: '再生設定',
+    subtitles: '字幕',
+    subOff: 'オフ',
+    subNone: '字幕なし',
+    subLoading: '字幕を読み込み中…',
   },
   dash: {
     title: 'ダッシュボード', server: 'サーバー', users: 'ユーザー', libraries: 'ライブラリ',

@@ -2,7 +2,7 @@ import os
 import json
 from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from fastapi.responses import StreamingResponse, FileResponse
+from fastapi.responses import StreamingResponse, FileResponse, Response
 from sqlalchemy.orm import Session
 from sqlalchemy import select, func, or_, desc
 from pydantic import BaseModel
@@ -14,6 +14,12 @@ from ..models.user import User
 from ..models.progress import PlaybackProgress
 from .deps import get_current_user, get_current_admin
 from ..services.scanner import scan_directory
+from ..services.subtitles import (
+    resolve_video_path,
+    list_tracks as subtitle_list_tracks,
+    find_track as subtitle_find_track,
+    track_to_vtt,
+)
 
 router = APIRouter(prefix="/api/media", tags=["media"])
 
@@ -322,6 +328,79 @@ async def get_fanart(
         return await _proxy_remote_image(fanart, referer=_guess_referer(fanart))
 
     raise HTTPException(status_code=404, detail="背景图不存在")
+
+
+class SubtitleTrack(BaseModel):
+    id: str
+    label: str
+    language: str
+    format: str
+    source: str
+    index: Optional[int] = None
+
+
+class SubtitleListResponse(BaseModel):
+    tracks: List[SubtitleTrack]
+
+
+def _resolve_media_video(item: MediaItem, part: int = 0) -> Path:
+    return resolve_video_path(
+        item.file_path or "",
+        settings.MEDIA_ROOT,
+        _parts(item),
+        part=part,
+    )
+
+
+@router.get("/subtitles/{media_id}", response_model=SubtitleListResponse)
+async def list_subtitles(
+    media_id: int,
+    request: Request,
+    token: str = Query(None),
+    part: int = Query(0),
+    db: Session = Depends(get_db),
+):
+    user = await _auth_user(request, token, db)
+    if not user:
+        raise HTTPException(status_code=401, detail="未授权")
+    result = db.execute(select(MediaItem).where(MediaItem.id == media_id))
+    item = result.scalar_one_or_none()
+    if not item:
+        raise HTTPException(status_code=404, detail="媒体不存在")
+    video = _resolve_media_video(item, part)
+    tracks = subtitle_list_tracks(video)
+    return SubtitleListResponse(tracks=[SubtitleTrack(**t) for t in tracks])
+
+
+@router.get("/subtitles/{media_id}/{track_id}")
+async def get_subtitle_track(
+    media_id: int,
+    track_id: str,
+    request: Request,
+    token: str = Query(None),
+    part: int = Query(0),
+    db: Session = Depends(get_db),
+):
+    user = await _auth_user(request, token, db)
+    if not user:
+        raise HTTPException(status_code=401, detail="未授权")
+    result = db.execute(select(MediaItem).where(MediaItem.id == media_id))
+    item = result.scalar_one_or_none()
+    if not item:
+        raise HTTPException(status_code=404, detail="媒体不存在")
+    video = _resolve_media_video(item, part)
+    track = subtitle_find_track(video, track_id)
+    if not track:
+        raise HTTPException(status_code=404, detail="字幕轨不存在")
+    vtt, err = track_to_vtt(track)
+    if err or not vtt:
+        raise HTTPException(status_code=422, detail=err or "无法转换字幕")
+    return Response(
+        content=vtt,
+        media_type="text/vtt; charset=utf-8",
+        headers={"Cache-Control": "private, max-age=60"},
+    )
+
 
 @router.get("/stream/{media_id}")
 async def stream_media(
