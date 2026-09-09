@@ -28,6 +28,8 @@ export default {
     continue: 'Continue watching',
     libraries: 'My media',
     latest: 'Latest / Featured',
+    latestAdded: 'Recently added',
+    allMedia: 'All media',
     all: 'All',
     items: '{n} items',
     search: 'Search',

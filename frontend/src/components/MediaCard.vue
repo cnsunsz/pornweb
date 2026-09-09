@@ -91,13 +91,14 @@ const categoryLabel = computed(() => {
 </script>
 
 <style scoped>
+/* Emby-style poster card: tight radius, compact title under cover */
 .card {
   cursor: pointer;
   border-radius: var(--radius);
   overflow: hidden;
-  transition: transform 0.15s ease;
+  transition: transform 0.12s ease;
 }
-.card:hover { transform: translateY(-2px); }
+.card:hover { transform: translateY(-1px); }
 
 .poster {
   position: relative;
@@ -105,7 +106,8 @@ const categoryLabel = computed(() => {
   background: #141414;
   border-radius: var(--radius);
   overflow: hidden;
-  border: 1px solid transparent;
+  border: 1px solid rgba(255,255,255,0.04);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.35);
 }
 .card:hover .poster { border-color: var(--accent); }
 .poster img { width: 100%; height: 100%; object-fit: cover; display: block; }
@@ -114,56 +116,58 @@ const categoryLabel = computed(() => {
 }
 .skeleton { color: #333; animation: pulse 1.5s infinite; }
 @keyframes pulse { 0%,100% { opacity: 0.3; } 50% { opacity: 0.7; } }
-.fallback { background: linear-gradient(135deg, #1a1a1a, #222); padding: 10px; }
+.fallback { background: linear-gradient(135deg, #1a1a1a, #222); padding: 8px; }
 .fallback span {
-  color: #777; font-size: 11px; text-align: center; line-height: 1.35; word-break: break-all;
+  color: #777; font-size: 10px; text-align: center; line-height: 1.3; word-break: break-all;
 }
 
 .overlay {
   position: absolute; inset: 0;
-  background: rgba(0,0,0,0.45);
+  background: rgba(0,0,0,0.4);
   display: flex; align-items: center; justify-content: center;
-  opacity: 0; transition: opacity 0.15s;
+  opacity: 0; transition: opacity 0.12s;
 }
 .card:hover .overlay { opacity: 1; }
 .play-btn {
-  width: 42px; height: 42px; border-radius: 50%;
+  width: 38px; height: 38px; border-radius: 50%;
   background: var(--accent);
   display: flex; align-items: center; justify-content: center;
-  box-shadow: 0 4px 14px rgba(0,0,0,0.45);
+  box-shadow: 0 3px 12px rgba(0,0,0,0.45);
 }
 
 .duration {
-  position: absolute; right: 5px; bottom: 6px;
+  position: absolute; right: 4px; bottom: 5px;
   background: rgba(0,0,0,0.82); color: #fff;
-  padding: 1px 5px; border-radius: 2px;
-  font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums;
+  padding: 1px 4px; border-radius: 2px;
+  font-size: 10px; font-weight: 700; font-variant-numeric: tabular-nums;
   letter-spacing: 0.02em;
 }
 
 .rating {
-  position: absolute; top: 5px; left: 5px;
+  position: absolute; top: 4px; left: 4px;
   background: rgba(0,0,0,0.78); color: var(--accent);
-  padding: 1px 5px; border-radius: 2px; font-size: 11px; font-weight: 700;
+  padding: 1px 4px; border-radius: 2px; font-size: 10px; font-weight: 700;
   display: flex; align-items: center; gap: 2px;
 }
 
 .progress {
-  position: absolute; bottom: 0; left: 0; right: 0; height: 3px;
-  background: rgba(255,255,255,0.18);
+  position: absolute; bottom: 0; left: 0; right: 0; height: 2.5px;
+  background: rgba(255,255,255,0.16);
 }
 .bar { height: 100%; background: var(--accent); }
 
-.info { padding: 6px 1px 2px; }
+.info { padding: 5px 1px 0; }
 .title {
-  font-size: 12px; font-weight: 600; line-height: 1.35;
+  font-size: 12px; font-weight: 600; line-height: 1.28;
+  letter-spacing: 0.01em;
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
-  overflow: hidden; color: #e8e8e8;
+  overflow: hidden; color: #e6e6e6;
 }
 .card:hover .title { color: var(--accent); }
 .meta {
-  font-size: 11px; color: var(--text-muted); margin-top: 3px;
-  display: flex; align-items: center; gap: 4px;
+  font-size: 10.5px; color: var(--text-muted); margin-top: 2px;
+  display: flex; align-items: center; gap: 3px;
+  line-height: 1.2;
 }
-.dot { opacity: 0.6; }
+.dot { opacity: 0.55; }
 </style>

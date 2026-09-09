@@ -44,7 +44,7 @@ const elLocale = computed(() => ({
 }
 .app-main {
   flex: 1;
-  padding: 14px 16px 28px;
+  padding: 12px 14px 24px; /* Emby denser page chrome */
   max-width: 1680px;
   margin: 0 auto;
   width: 100%;
@@ -58,6 +58,6 @@ const elLocale = computed(() => ({
   padding: 0;
 }
 @media (min-width: 900px) {
-  .app-main { padding: 16px 20px 36px; }
+  .app-main { padding: 14px 18px 32px; }
 }
 </style>

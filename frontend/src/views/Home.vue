@@ -1,12 +1,22 @@
 <template>
   <div class="home">
-    <!-- Continue Watching strip -->
+    <!-- Continue Watching strip (progress > 0) -->
     <section v-if="continueList.length" class="section">
       <div class="section-head">
-        <h2 class="section-title">{{ t('home.continue') }}</h2>
+        <h2 class="section-title emby-section-title">{{ t('home.continue') }}</h2>
       </div>
-      <div class="scroll-row">
+      <div class="emby-scroll-row">
         <MediaCard v-for="item in continueList" :key="'c-'+item.id" :item="item" @click="go(item)" />
+      </div>
+    </section>
+
+    <!-- Latest added — Emby-style horizontal row (default home only) -->
+    <section v-if="showLatestRow && latestList.length" class="section">
+      <div class="section-head">
+        <h2 class="section-title emby-section-title">{{ t('home.latestAdded') }}</h2>
+      </div>
+      <div class="emby-scroll-row">
+        <MediaCard v-for="item in latestList" :key="'l-'+item.id" :item="item" @click="go(item)" />
       </div>
     </section>
 
@@ -35,10 +45,10 @@
       </div>
     </section>
 
-    <!-- Latest / Filtered cover wall -->
+    <!-- Dense poster wall (filtered / all) -->
     <section class="section">
       <div class="section-top">
-        <h2 class="section-title">
+        <h2 class="section-title emby-section-title">
           {{ sectionTitle }}
           <span v-if="mediaStore.total" class="total">{{ t('home.items', { n: mediaStore.total }) }}</span>
         </h2>
@@ -88,7 +98,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useMediaStore } from '@/stores/media'
-import { getFolders, getContinue } from '@/api/media'
+import { getFolders, getContinue, getMediaList } from '@/api/media'
 import { Loading } from '@element-plus/icons-vue'
 import MediaCard from '@/components/MediaCard.vue'
 
@@ -102,20 +112,27 @@ const ord = ref('newest')
 const currentPage = ref(1)
 const libraries = ref([])
 const continueList = ref([])
+const latestList = ref([])
 const activeLib = ref(null)
 const genre = ref('')
 
 const genreChips = computed(() => (mediaStore.genres || []).slice(0, 16))
 
+/* trail: show Emby "Latest added" row only on unfiltered home (no search/lib/genre) */
+const showLatestRow = computed(() => {
+  const q = typeof route.query.q === 'string' ? route.query.q.trim() : ''
+  return !q && !activeLib.value && !genre.value
+})
+
 const sectionTitle = computed(() => {
   if (route.query.q) return t('home.searchResults', { q: route.query.q })
   if (activeLib.value) return activeLib.value.name
   if (genre.value) return genre.value
-  return t('home.latest')
+  return showLatestRow.value ? t('home.allMedia') : t('home.latest')
 })
 
 onMounted(async () => {
-  await Promise.all([loadLibs(), mediaStore.fetchGenres().catch(() => {}), loadContinue()])
+  await Promise.all([loadLibs(), mediaStore.fetchGenres().catch(() => {}), loadContinue(), loadLatest()])
   await loadMedia()
 })
 
@@ -149,6 +166,14 @@ async function loadContinue() {
   } catch (e) { console.error('loadContinue error:', e) }
 }
 
+async function loadLatest() {
+  try {
+    // Existing list API — newest first; no API shape change
+    const res = await getMediaList({ page: 1, page_size: 24, sort: 'newest' })
+    latestList.value = res.data.items || []
+  } catch (e) { console.error('loadLatest error:', e) }
+}
+
 function go(item) { router.push('/media/' + item.id) }
 function openLib(lib) {
   activeLib.value = lib
@@ -175,27 +200,18 @@ function onPage(p) { currentPage.value = p; loadMedia() }
 </script>
 
 <style scoped>
-.home { display: flex; flex-direction: column; gap: 22px; }
+.home { display: flex; flex-direction: column; gap: 18px; }
 .section-head, .section-top {
   display: flex; align-items: center; justify-content: space-between;
-  margin-bottom: 10px; flex-wrap: wrap; gap: 8px;
+  margin-bottom: 8px; flex-wrap: wrap; gap: 6px;
 }
 .section-title {
-  font-size: 18px; font-weight: 800; margin: 0;
-  display: flex; align-items: baseline; gap: 10px;
+  font-size: 16px; font-weight: 700; margin: 0;
+  display: flex; align-items: baseline; gap: 8px;
+  letter-spacing: 0.01em;
 }
-.total { font-size: 12px; font-weight: 600; color: var(--text-muted); }
+.total { font-size: 11px; font-weight: 600; color: var(--text-muted); }
 .filters { display: flex; gap: 8px; align-items: center; }
-.scroll-row {
-  display: flex; gap: 10px; overflow-x: auto; padding-bottom: 4px;
-  scrollbar-width: thin; scrollbar-color: #333 transparent;
-}
-.scroll-row::-webkit-scrollbar { height: 5px; }
-.scroll-row::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
-.scroll-row > * { flex: 0 0 132px; }
-@media (min-width: 900px) {
-  .scroll-row > * { flex: 0 0 148px; }
-}
 
 .chip-row {
   display: flex; flex-wrap: wrap; gap: 6px;
@@ -205,7 +221,7 @@ function onPage(p) { currentPage.value = p; loadMedia() }
   border: 1px solid #2a2a2a;
   background: #161616;
   color: var(--text-dim);
-  padding: 5px 12px;
+  padding: 4px 11px;
   border-radius: 999px;
   cursor: pointer;
   font-size: 12px;
@@ -226,8 +242,8 @@ function onPage(p) { currentPage.value = p; loadMedia() }
 .chip.on .chip-n { opacity: 0.85; }
 .chip-genre { border-style: dashed; }
 
-.empty { text-align: center; padding: 72px 20px; color: var(--text-muted); }
+.empty { text-align: center; padding: 64px 20px; color: var(--text-muted); }
 .empty p { margin-top: 12px; }
-.loading { display: flex; justify-content: center; padding: 28px; color: var(--accent); }
-.pager { display: flex; justify-content: center; padding: 22px 0 4px; }
+.loading { display: flex; justify-content: center; padding: 24px; color: var(--accent); }
+.pager { display: flex; justify-content: center; padding: 18px 0 2px; }
 </style>

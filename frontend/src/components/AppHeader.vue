@@ -82,9 +82,9 @@ function onCommand(cmd) {
   margin: 0 auto;
   display: flex;
   align-items: center;
-  padding: 0 14px;
+  padding: 0 12px;
   height: var(--header-h);
-  gap: 12px;
+  gap: 10px;
 }
 .logo {
   display: inline-flex;
@@ -101,7 +101,7 @@ function onCommand(cmd) {
   flex: 1;
   max-width: 420px;
   min-width: 0;
-  height: 34px;
+  height: 32px;
   border: 1px solid #333;
   border-radius: 4px;
   overflow: hidden;
@@ -136,7 +136,7 @@ function onCommand(cmd) {
   margin-left: auto;
 }
 .nav-item {
-  padding: 7px 10px;
+  padding: 6px 9px;
   border-radius: 4px;
   color: var(--text-dim);
   font-size: 13px;

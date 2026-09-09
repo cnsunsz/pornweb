@@ -359,7 +359,7 @@ function fmtTime(s) {
   .info h1 { font-size: 22px; }
   .tags, .genre, .btns, .parts { justify-content: center; }
   .body { padding: 8px 16px 32px; }
-  .cast-card, .cast-thumb { flex-basis: 96px; width: 96px; }
-  .cast-thumb { height: 96px; }
+  .cast-card, .cast-thumb { flex-basis: 88px; width: 88px; }
+  .cast-thumb { height: 88px; }
 }
 </style>

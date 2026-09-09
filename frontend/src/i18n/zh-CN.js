@@ -28,6 +28,8 @@ export default {
     continue: '继续观看',
     libraries: '我的媒体库',
     latest: '最新 / 推荐',
+    latestAdded: '最新添加',
+    allMedia: '全部内容',
     all: '全部',
     items: '{n} 个项目',
     search: '搜索',

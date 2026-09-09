@@ -16,8 +16,8 @@
   --danger: #eb5558;
   --success: #52b788;
   --warning: #f0c040;
-  --header-h: 52px;
-  --radius: 4px;
+  --header-h: 48px;
+  --radius: 3px; /* Emby-like card radius */
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -123,18 +123,55 @@ a:hover { color: var(--accent-hover); }
 .el-dropdown-menu__item { color: var(--text) !important; }
 .el-dropdown-menu__item:hover { background: var(--bg-hover) !important; color: var(--accent) !important; }
 
-/* Shared dense cover wall */
+/* Shared dense cover wall — Emby-like tighter gaps / card footprint */
 .tube-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-  gap: 10px 8px;
+  grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
+  gap: 6px 6px; /* trail: Emby poster walls use ~6–8px gutters */
+}
+@media (min-width: 700px) {
+  .tube-grid { grid-template-columns: repeat(auto-fill, minmax(128px, 1fr)); gap: 8px 7px; }
 }
 @media (min-width: 900px) {
-  .tube-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px 10px; }
+  .tube-grid { grid-template-columns: repeat(auto-fill, minmax(136px, 1fr)); gap: 8px 8px; }
 }
 @media (min-width: 1280px) {
-  .tube-grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
+  .tube-grid { grid-template-columns: repeat(auto-fill, minmax(144px, 1fr)); gap: 10px 8px; }
 }
 @media (min-width: 1600px) {
-  .tube-grid { grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); }
+  .tube-grid { grid-template-columns: repeat(auto-fill, minmax(152px, 1fr)); }
+}
+
+/* Emby-style horizontal media row */
+.emby-scroll-row {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 2px 0 6px;
+  scroll-snap-type: x proximity;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: #333 transparent;
+}
+.emby-scroll-row::-webkit-scrollbar { height: 5px; }
+.emby-scroll-row::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
+.emby-scroll-row > * {
+  flex: 0 0 120px;
+  scroll-snap-align: start;
+}
+@media (min-width: 900px) {
+  .emby-scroll-row > * { flex: 0 0 136px; }
+}
+@media (min-width: 1280px) {
+  .emby-scroll-row > * { flex: 0 0 144px; }
+}
+
+/* Section titles shared across Home / Detail */
+.emby-section-title {
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  margin: 0;
+  color: var(--text);
+  line-height: 1.25;
 }
