@@ -459,12 +459,15 @@ async def stream_media(
             start, end = 0, file_size - 1
         content_length = end - start + 1
         
+        # 1MiB chunks: fewer FUSE/rclone syscalls than 64KiB; better sustained bitrate
+        _CHUNK = 1024 * 1024
+
         def iter_file():
             with open(file_path, "rb") as f:
                 f.seek(start)
                 remaining = content_length
                 while remaining > 0:
-                    chunk_size = min(65536, remaining)
+                    chunk_size = min(_CHUNK, remaining)
                     chunk = f.read(chunk_size)
                     if not chunk:
                         break
@@ -477,17 +480,24 @@ async def stream_media(
                 "Content-Range": f"bytes {start}-{end}/{file_size}",
                 "Accept-Ranges": "bytes",
                 "Content-Length": str(content_length),
+                "Cache-Control": "no-store",
             }
         )
     
+    _CHUNK = 1024 * 1024
+
     def iter_file():
         with open(file_path, "rb") as f:
-            while chunk := f.read(65536):
+            while chunk := f.read(_CHUNK):
                 yield chunk
     
     return StreamingResponse(
         iter_file(), media_type=content_type,
-        headers={"Accept-Ranges": "bytes", "Content-Length": str(file_size)}
+        headers={
+            "Accept-Ranges": "bytes",
+            "Content-Length": str(file_size),
+            "Cache-Control": "no-store",
+        }
     )
 
 @router.post("/scan", response_model=ScanResponse)

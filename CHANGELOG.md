@@ -1,5 +1,15 @@
 # Changelog
 
+## [v2.1.10] - 2026-09-09
+
+### 修复
+- **播放卡顿/极慢**：rclone VFS 缓存写到已满的 /tmp (tmpfs 454M)。vfs-cache-mode=full 在 seek 时 ENOSPC/IO error。已改为 cache-dir=/var/cache/rclone-123, vfs-cache-max-size=8G, vfs-read-ahead=128M
+- 流式接口 GET /api/media/stream/{id} 读块从 64KiB 提到 1MiB，减少 rclone FUSE syscall；响应增加 Cache-Control: no-store
+
+### 说明
+- Nginx :2052 已是 proxy_buffering off + Range 透传，不是瓶颈
+- 前端字幕列表异步加载，不阻塞起播
+
 ## [v2.1.9] - 2026-09-09
 
 ### 新增
