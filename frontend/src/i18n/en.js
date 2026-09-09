@@ -78,6 +78,10 @@ export default {
     subOff: 'Off',
     subNone: 'No subtitles',
     subLoading: 'Loading subtitles…',
+    subExtracting: 'Extracting embedded subtitles (may be slow on cloud disk)…',
+    playError: 'Playback failed. Please retry.',
+    decodeError: 'Browser cannot decode this media (often E-AC3/DTS/TrueHD audio). Use an AAC source or the app.',
+    retry: 'Retry',
   },
   dash: {
     title: 'Dashboard', server: 'Server', users: 'Users', libraries: 'Libraries',

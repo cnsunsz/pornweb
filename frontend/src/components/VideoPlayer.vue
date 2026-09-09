@@ -26,8 +26,13 @@
       @error="onError"
     />
 
-    <div v-if="isBuffering" class="buffering">
+    <div v-if="isBuffering && !playError" class="buffering">
       <div class="spinner"></div>
+    </div>
+
+    <div v-if="playError" class="play-error" @click.stop>
+      <div class="play-error-msg">{{ playError }}</div>
+      <button class="play-error-btn" @click="retryPlay">{{ t('player.retry') }}</button>
     </div>
 
     <div v-if="isPaused && !isBuffering" class="center-play" @click.stop="togglePlay">
@@ -180,6 +185,7 @@ const progressEl = ref(null)
 
 const isPaused = ref(true)
 const isBuffering = ref(false)
+const playError = ref('')
 const isFullscreen = ref(false)
 const isMuted = ref(false)
 const volume = ref(1)
@@ -318,6 +324,7 @@ function onProgressHover(e) {
 }
 
 function onLoaded() {
+  playError.value = ''
   duration.value = videoEl.value.duration
   baseRate = prefs.defaultSpeed
   applyRate(prefs.defaultSpeed)
@@ -360,6 +367,24 @@ function onEnded() {
 }
 function onError() {
   isBuffering.value = false
+  const err = videoEl.value?.error
+  const code = err?.code
+  // 3=DECODE, 4=SRC_NOT_SUPPORTED — often unsupported audio (E-AC3/DTS/TrueHD) in MKV
+  if (code === 3 || code === 4) {
+    playError.value = t('player.decodeError')
+  } else if (code) {
+    playError.value = t('player.playError')
+  } else {
+    playError.value = t('player.playError')
+  }
+}
+function retryPlay() {
+  playError.value = ''
+  isBuffering.value = true
+  if (videoEl.value) {
+    videoEl.value.load()
+    videoEl.value.play().catch(() => {})
+  }
 }
 
 function getStorageKey() { return props.mediaId ? `mv_pos_${props.mediaId}` : '' }
@@ -623,6 +648,9 @@ const subMenuOpen = ref(false)
 const subLoading = ref(false)
 
 function preferDefaultTrack(tracks) {
+  // Only auto-enable cheap external sidecars. Embedded MKV extract on rclone
+  // can take minutes and starves video Range reads (endless spinner) — match
+  // Android: on-demand single track when user picks.
   const rank = (lang) => {
     const l = (lang || '').toLowerCase()
     if (l.startsWith('zh')) return 0
@@ -630,7 +658,9 @@ function preferDefaultTrack(tracks) {
     if (l === 'ja') return 2
     return 9
   }
-  const sorted = [...tracks].sort((a, b) => rank(a.language) - rank(b.language))
+  const external = (tracks || []).filter((tr) => tr.source === 'external' && tr.supported !== false)
+  if (!external.length) return null
+  const sorted = [...external].sort((a, b) => rank(a.language) - rank(b.language))
   return sorted[0] || null
 }
 
@@ -698,6 +728,10 @@ function applySubtitleTrack(trackId) {
 function selectSubtitle(trackId) {
   selectedSubId.value = trackId
   subMenuOpen.value = false
+  const meta = subtitleTracks.value.find((tr) => tr.id === trackId)
+  if (meta && meta.source === 'embedded') {
+    flashHint(t('player.subExtracting'))
+  }
   applySubtitleTrack(trackId)
 }
 
@@ -786,6 +820,21 @@ function formatTime(s) {
   animation: spin 0.8s linear infinite;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+.play-error {
+  position: absolute; inset: 0; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 14px;
+  background: rgba(0,0,0,0.55); z-index: 6; padding: 24px; text-align: center;
+}
+.play-error-msg {
+  color: #fff; font-size: 15px; line-height: 1.5; max-width: 420px;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.8);
+}
+.play-error-btn {
+  background: var(--accent, #ffa31a); color: #111; border: none;
+  border-radius: 6px; padding: 8px 18px; font-size: 14px; font-weight: 600;
+  cursor: pointer;
+}
 
 .center-play {
   position: absolute; display: flex; align-items: center; justify-content: center;

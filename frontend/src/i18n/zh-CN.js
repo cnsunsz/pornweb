@@ -86,6 +86,10 @@ export default {
     subOff: '关闭字幕',
     subNone: '无可用字幕',
     subLoading: '加载字幕…',
+    subExtracting: '正在提取内嵌字幕（网盘较慢，请稍候）…',
+    playError: '播放失败，请重试',
+    decodeError: '浏览器无法解码该音视频（常见于 E-AC3/DTS/TrueHD 音轨），可换 AAC 源或用 App',
+    retry: '重试',
   },
   dash: {
     title: '控制台',

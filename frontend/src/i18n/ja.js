@@ -76,6 +76,10 @@ export default {
     subOff: 'オフ',
     subNone: '字幕なし',
     subLoading: '字幕を読み込み中…',
+    subExtracting: '内蔵字幕を抽出中（クラウドでは時間がかかることがあります）…',
+    playError: '再生に失敗しました。再試行してください。',
+    decodeError: 'ブラウザでこのメディアをデコードできません（E-AC3/DTS/TrueHD 音声など）。AAC 源かアプリをご利用ください。',
+    retry: '再試行',
   },
   dash: {
     title: 'ダッシュボード', server: 'サーバー', users: 'ユーザー', libraries: 'ライブラリ',

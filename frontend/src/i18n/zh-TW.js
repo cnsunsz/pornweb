@@ -76,6 +76,10 @@ export default {
     subOff: '關閉字幕',
     subNone: '無可用字幕',
     subLoading: '載入字幕…',
+    subExtracting: '正在提取內嵌字幕（網盤較慢，請稍候）…',
+    playError: '播放失敗，請重試',
+    decodeError: '瀏覽器無法解碼該影音（常見於 E-AC3/DTS/TrueHD 音軌），可換 AAC 源或用 App',
+    retry: '重試',
   },
   dash: {
     title: '控制台', server: '伺服器', users: '使用者', libraries: '媒體庫',

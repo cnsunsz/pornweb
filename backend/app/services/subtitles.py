@@ -9,6 +9,7 @@ import re
 import shutil
 import subprocess
 import threading
+import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -57,6 +58,9 @@ CACHE_DIR = Path(os.environ.get(
 ))
 _warm_lock = threading.Lock()
 _warming: set = set()
+_extract_lock = threading.Lock()
+_extract_events: Dict[str, threading.Event] = {}
+_extract_results: Dict[str, Tuple[Optional[str], Optional[str]]] = {}
 
 
 def _stable_id(kind: str, key: str) -> str:
@@ -223,11 +227,14 @@ def list_tracks(video: Path) -> List[Dict[str, Any]]:
             "supported": t.get("supported", True),
             "unsupported_reason": t.get("unsupported_reason"),
         })
-    # Warm cache for preferred Chinese / English text embeds in background
-    try:
-        _schedule_warm(video, emb)
-    except Exception:
-        logger.exception("subtitle warm schedule failed")
+    # Optional warm (off by default): concurrent mkvextract/ffmpeg on rclone
+    # starves video Range reads and causes endless buffering spinner.
+    # Enable with MV_SUB_WARM=1 only on local disks.
+    if os.environ.get("MV_SUB_WARM", "").strip().lower() in ("1", "true", "yes"):
+        try:
+            _schedule_warm(video, emb)
+        except Exception:
+            logger.exception("subtitle warm schedule failed")
     return out
 
 
@@ -442,8 +449,8 @@ def _ffmpeg_extract_srt_or_vtt(video: Path, stream_index: int, sub_index: Option
     return False, last_err
 
 
-def ffmpeg_extract_vtt(video: Path, stream_index: int, sub_index: Optional[int] = None, track_id: str = "") -> Tuple[Optional[str], Optional[str]]:
-    """Extract embedded text subtitles to WebVTT. Returns (vtt, error_detail)."""
+def _ffmpeg_extract_vtt_inner(video: Path, stream_index: int, sub_index: Optional[int], track_id: str) -> Tuple[Optional[str], Optional[str]]:
+    """Actual extract worker (no single-flight)."""
     if track_id:
         cached = _read_cache(track_id, video)
         if cached:
@@ -455,7 +462,7 @@ def ffmpeg_extract_vtt(video: Path, stream_index: int, sub_index: Optional[int] 
         return None, "需要 ffmpeg 或 mkvextract 才能提取内嵌字幕"
 
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
-    work = CACHE_DIR / f"work_{os.getpid()}_{stream_index}"
+    work = CACHE_DIR / f"work_{os.getpid()}_{stream_index}_{threading.get_ident()}"
     srt_path = work.with_suffix(".srt")
     vtt_path = work.with_suffix(".vtt")
     try:
@@ -500,6 +507,52 @@ def ffmpeg_extract_vtt(video: Path, stream_index: int, sub_index: Optional[int] 
                     p.unlink()
             except OSError:
                 pass
+
+
+def ffmpeg_extract_vtt(video: Path, stream_index: int, sub_index: Optional[int] = None, track_id: str = "") -> Tuple[Optional[str], Optional[str]]:
+    """Extract embedded text subtitles to WebVTT. Single-flight per track_id."""
+    if track_id:
+        cached = _read_cache(track_id, video)
+        if cached:
+            return cached, None
+        wait_event = None
+        leader = False
+        with _extract_lock:
+            cached = _read_cache(track_id, video)
+            if cached:
+                return cached, None
+            if track_id in _extract_events:
+                wait_event = _extract_events[track_id]
+            else:
+                wait_event = threading.Event()
+                _extract_events[track_id] = wait_event
+                leader = True
+        if not leader:
+            wait_event.wait(timeout=EXTRACT_TIMEOUT_SEC + 30)
+            with _extract_lock:
+                if track_id in _extract_results:
+                    return _extract_results[track_id]
+            cached = _read_cache(track_id, video)
+            if cached:
+                return cached, None
+            return None, "字幕提取进行中，请稍后重试"
+        try:
+            result = _ffmpeg_extract_vtt_inner(video, stream_index, sub_index, track_id)
+            with _extract_lock:
+                _extract_results[track_id] = result
+            return result
+        finally:
+            with _extract_lock:
+                ev = _extract_events.pop(track_id, None)
+                # keep result briefly for waiters; drop later
+            if ev:
+                ev.set()
+            def _clear(tid=track_id):
+                time.sleep(2)
+                with _extract_lock:
+                    _extract_results.pop(tid, None)
+            threading.Thread(target=_clear, daemon=True).start()
+    return _ffmpeg_extract_vtt_inner(video, stream_index, sub_index, track_id)
 
 
 def _lang_priority(lang: str) -> int:
