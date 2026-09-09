@@ -17,6 +17,12 @@ export function getStreamUrl(id, part = 0) {
   return `/api/media/stream/${id}?token=${tokenQ()}&part=${part || 0}`
 }
 
+/** Browser-only: ffmpeg remux video copy + AAC audio as fMP4 (keeps raw stream for App). */
+export function getWebStreamUrl(id, part = 0, start = 0) {
+  const s = start && start > 0 ? `&start=${encodeURIComponent(Number(start).toFixed(3))}` : ''
+  return `/api/media/stream/${id}/web?token=${tokenQ()}&part=${part || 0}${s}`
+}
+
 export function getSubtitles(id, part = 0) {
   return api.get(`/media/subtitles/${id}`, { params: { part: part || 0 } })
 }

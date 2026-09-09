@@ -98,6 +98,9 @@
       :media-id="item.id"
       :part="partIndex"
       :parts="parts"
+      :web-remux="isWebRemux"
+      :audio-codec="item.audio_codec || ''"
+      :media-duration="Number(item.duration) || 0"
       @close="playing=false"
       @part="playPart"
     />
@@ -110,7 +113,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useMediaStore } from '@/stores/media'
-import { getStreamUrl, getPosterUrl, getFanartUrl, getMediaList, scrapeMedia } from '@/api/media'
+import { getStreamUrl, getWebStreamUrl, getPosterUrl, getFanartUrl, getMediaList, scrapeMedia } from '@/api/media'
 import { getActorPhotoUrl } from '@/api/actors'
 import { useAuthStore } from '@/stores/auth'
 import { ElMessage } from 'element-plus'
@@ -131,7 +134,21 @@ const related = ref([])
 const scraping = ref(false)
 
 const parts = computed(() => item.value?.extra_files || [])
-const streamUrl = computed(() => item.value ? getStreamUrl(item.value.id, partIndex.value) : '')
+function useWebRemux(it) {
+  if (!it) return false
+  if (it.needs_audio_remux) return true
+  const name = (it.filename || '').toLowerCase()
+  const ac = (it.audio_codec || '').toLowerCase()
+  if (['eac3', 'ac3', 'dts', 'truehd', 'mlp'].includes(ac)) return true
+  if (name.endsWith('.mkv') && ac && !['aac', 'mp3', 'opus', 'vorbis', 'flac'].includes(ac)) return true
+  return false
+}
+const streamUrl = computed(() => {
+  if (!item.value) return ''
+  if (useWebRemux(item.value)) return getWebStreamUrl(item.value.id, partIndex.value)
+  return getStreamUrl(item.value.id, partIndex.value)
+})
+const isWebRemux = computed(() => useWebRemux(item.value))
 const posterSrc = computed(() => {
   if (!item.value) return ''
   return item.value.poster_url || item.value.id ? getPosterUrl(item.value.id) : ''

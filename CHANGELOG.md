@@ -1,5 +1,23 @@
 # Changelog
 
+## [v2.1.13] - 2026-09-09
+
+### 新增
+- **网页 AAC 转封装播放**：`GET /api/media/stream/{id}/web` — ffmpeg 复制视频轨、音轨转 AAC 立体声，输出可边下边播的 fMP4（pipe，不全量落盘）
+- 媒体详情增加 `container` / `video_codec` / `audio_codec` / `audio_channels` / `needs_audio_remux`（ffprobe，带磁盘缓存）
+- 前端：MKV 或 E-AC3/DTS/TrueHD/AC3 时自动走 `/web`；原始 `/api/media/stream/{id}` 仍留给安卓/外部播放器
+- 网页转封装进度条/快进：按时间戳重启 ffmpeg（`?start=`），因 pipe 无字节 Range
+
+### 修复
+- 浏览器无声（HEVC+E-AC3 等）：不再依赖「解码错误」才提示；主动 remux 出可听 AAC
+- 多音轨时以**第 0 轨**判定是否需要网页 remux（浏览器默认播第 0 轨）；若后续有 AAC 则优先 copy 该轨
+- 解码仍失败时明确提示：「浏览器不支持该音轨(E-AC3)，请用安卓/外部播放器」
+
+### 说明
+- 并发 remux 默认上限 2（`MV_WEB_REMUX_MAX`）；码率 `MV_WEB_AAC_BITRATE`（默认 192k）
+- rclone 上首次起播仍受网盘首字节影响；勿同时跑字幕全量抽取（v2.1.12 已关预热）
+
+
 ## [v2.1.12] - 2026-09-09
 
 ### 修复

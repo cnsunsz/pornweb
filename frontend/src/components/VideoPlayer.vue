@@ -162,7 +162,7 @@
 import { ref, onMounted, onUnmounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
-import { saveProgress, getSubtitles, getSubtitleUrl } from '@/api/media'
+import { saveProgress, getSubtitles, getSubtitleUrl, getWebStreamUrl } from '@/api/media'
 import { usePlayerPrefs } from '@/composables/usePlayerPrefs'
 
 const { t } = useI18n()
@@ -175,6 +175,9 @@ const props = defineProps({
   mediaId: { type: Number, default: null },
   part: { type: Number, default: 0 },
   parts: { type: Array, default: () => [] },
+  webRemux: { type: Boolean, default: false },
+  audioCodec: { type: String, default: '' },
+  mediaDuration: { type: Number, default: 0 },
 })
 
 const emit = defineEmits(['close', 'part'])
@@ -214,6 +217,8 @@ let dragSeek = null // { startX, startTime, width }
 let hintTimer = null
 let suppressClickUntil = 0
 let pointerDownAt = null
+let remuxBaseStart = 0
+let remuxReloading = false
 
 const SPEEDS = [0.75, 1, 1.25, 1.5, 2]
 
@@ -246,6 +251,12 @@ function togglePlay() {
 
 function skip(sec) {
   if (!videoEl.value) return
+  if (props.webRemux) {
+    const abs = Math.max(0, Math.min(duration.value || 1e12, remuxAbsoluteTime() + sec))
+    reloadRemuxAt(abs)
+    showControls()
+    return
+  }
   videoEl.value.currentTime = Math.max(0, Math.min(duration.value, videoEl.value.currentTime + sec))
   showControls()
 }
@@ -309,11 +320,35 @@ function stopSeek() {
   document.removeEventListener('mousemove', onSeekMove)
   document.removeEventListener('mouseup', stopSeek)
 }
+function remuxAbsoluteTime() {
+  return remuxBaseStart + (videoEl.value?.currentTime || 0)
+}
+
+function reloadRemuxAt(absSec) {
+  if (!props.mediaId || remuxReloading) return
+  remuxReloading = true
+  isBuffering.value = true
+  playError.value = ''
+  remuxBaseStart = Math.max(0, absSec)
+  const url = getWebStreamUrl(props.mediaId, props.part || 0, remuxBaseStart)
+  const v = videoEl.value
+  if (!v) { remuxReloading = false; return }
+  v.src = url
+  v.load()
+  v.play().catch(() => {}).finally(() => { remuxReloading = false })
+}
+
 function seekTo(e) {
   if (!progressEl.value || !videoEl.value) return
   const rect = progressEl.value.getBoundingClientRect()
   const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width))
-  videoEl.value.currentTime = pct * duration.value
+  const target = pct * duration.value
+  if (props.webRemux) {
+    // fMP4 pipe cannot byte-seek; restart ffmpeg at timestamp (Emby-style)
+    reloadRemuxAt(target)
+    return
+  }
+  videoEl.value.currentTime = target
 }
 function onProgressHover(e) {
   if (!progressEl.value) return
@@ -325,21 +360,35 @@ function onProgressHover(e) {
 
 function onLoaded() {
   playError.value = ''
-  duration.value = videoEl.value.duration
+  const d = videoEl.value.duration
+  if (d && isFinite(d) && d > 0 && !props.webRemux) {
+    duration.value = d
+  } else if (d && isFinite(d) && d > 0 && props.webRemux && !duration.value) {
+    duration.value = remuxBaseStart + d
+  }
+  // Prefer server-known duration from localStorage progress payload if present
+  try {
+    const kd = localStorage.getItem(props.mediaId ? `mv_dur_${props.mediaId}` : '')
+    if (kd && Number(kd) > 0) duration.value = Number(kd)
+  } catch {}
   baseRate = prefs.defaultSpeed
   applyRate(prefs.defaultSpeed)
-  // Honor Android-style resume toggle; still apply saved volume.
-  if (prefs.resumeOnOpen) {
+  if (prefs.resumeOnOpen && !props.webRemux) {
     const saved = getSavedPosition()
     if (saved > 0 && saved < (duration.value || Infinity) - 3) {
       videoEl.value.currentTime = saved
+    }
+  } else if (prefs.resumeOnOpen && props.webRemux && remuxBaseStart === 0) {
+    const saved = getSavedPosition()
+    if (saved > 5 && saved < (duration.value || Infinity) - 3) {
+      reloadRemuxAt(saved)
+      return
     }
   }
   const savedVol = localStorage.getItem('mv_volume')
   if (savedVol !== null) setVolume(parseFloat(savedVol))
   videoEl.value.play().catch(() => {})
   if (prefs.autoFullscreen && !document.fullscreenElement) {
-    // Browser may require a user gesture; try once after metadata.
     setTimeout(() => {
       try { toggleFullscreen() } catch {}
     }, 50)
@@ -347,11 +396,25 @@ function onLoaded() {
 }
 function onTimeUpdate() {
   if (!videoEl.value || seeking) return
-  currentTime.value = videoEl.value.currentTime
-  duration.value = videoEl.value.duration || 0
+  if (props.webRemux) {
+    currentTime.value = remuxAbsoluteTime()
+    // fMP4 pipe often has infinite/unknown duration — keep last known if finite
+    const d = videoEl.value.duration
+    if (d && isFinite(d) && d > 0) {
+      // relative duration from this segment only; prefer saved media duration
+      if (!duration.value || duration.value < remuxBaseStart + d) {
+        // leave duration if already set from metadata / progress
+      }
+    }
+  } else {
+    currentTime.value = videoEl.value.currentTime
+    duration.value = videoEl.value.duration || 0
+  }
   playedPercent.value = duration.value ? (currentTime.value / duration.value) * 100 : 0
-  if (videoEl.value.buffered.length > 0) {
-    bufferedPercent.value = (videoEl.value.buffered.end(videoEl.value.buffered.length - 1) / duration.value) * 100
+  if (videoEl.value.buffered.length > 0 && duration.value) {
+    const end = videoEl.value.buffered.end(videoEl.value.buffered.length - 1)
+    const absEnd = props.webRemux ? remuxBaseStart + end : end
+    bufferedPercent.value = (absEnd / duration.value) * 100
   }
   savePosition()
 }
@@ -369,9 +432,15 @@ function onError() {
   isBuffering.value = false
   const err = videoEl.value?.error
   const code = err?.code
+  const ac = (props.audioCodec || '').toLowerCase()
+  const risky = ['eac3', 'ac3', 'dts', 'truehd', 'mlp'].includes(ac)
   // 3=DECODE, 4=SRC_NOT_SUPPORTED — often unsupported audio (E-AC3/DTS/TrueHD) in MKV
-  if (code === 3 || code === 4) {
-    playError.value = t('player.decodeError')
+  if (code === 3 || code === 4 || risky) {
+    if (props.webRemux) {
+      playError.value = t('player.remuxError')
+    } else {
+      playError.value = t('player.decodeError')
+    }
   } else if (code) {
     playError.value = t('player.playError')
   } else {
@@ -392,6 +461,9 @@ function savePosition() {
   const key = getStorageKey()
   if (key && currentTime.value > 5) {
     localStorage.setItem(key, String(Math.floor(currentTime.value)))
+  }
+  if (props.mediaId && duration.value > 0) {
+    localStorage.setItem(`mv_dur_${props.mediaId}`, String(Math.floor(duration.value)))
   }
   const now = Date.now()
   if (props.mediaId && now - lastSave > 4000) {
@@ -736,6 +808,7 @@ function selectSubtitle(trackId) {
 }
 
 onMounted(() => {
+  if (props.mediaDuration > 0) duration.value = props.mediaDuration
   document.addEventListener('keydown', onKeydown)
   document.addEventListener('keyup', onKeyup)
   document.addEventListener('fullscreenchange', () => {
@@ -770,7 +843,13 @@ function switchPart(i) {
   emit('part', i)
 }
 
+watch(() => props.mediaDuration, (v) => {
+  if (v > 0) duration.value = v
+})
+
 watch(() => props.src, () => {
+  remuxBaseStart = 0
+  if (props.mediaDuration > 0) duration.value = props.mediaDuration
   if (videoEl.value) {
     videoEl.value.load()
     videoEl.value.play().catch(() => {})

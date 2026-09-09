@@ -78,7 +78,8 @@ export default {
     subLoading: '字幕を読み込み中…',
     subExtracting: '内蔵字幕を抽出中（クラウドでは時間がかかることがあります）…',
     playError: '再生に失敗しました。再試行してください。',
-    decodeError: 'ブラウザでこのメディアをデコードできません（E-AC3/DTS/TrueHD 音声など）。AAC 源かアプリをご利用ください。',
+    decodeError: 'ブラウザはこの音声トラック(E-AC3/DTS/TrueHD)に非対応です。Android/外部プレイヤーをご利用ください。',
+    remuxError: 'Web リマックス再生に失敗しました。Android/外部プレイヤーか再試行を。',
     retry: '再試行',
   },
   dash: {

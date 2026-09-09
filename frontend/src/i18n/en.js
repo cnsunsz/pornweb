@@ -80,7 +80,8 @@ export default {
     subLoading: 'Loading subtitles…',
     subExtracting: 'Extracting embedded subtitles (may be slow on cloud disk)…',
     playError: 'Playback failed. Please retry.',
-    decodeError: 'Browser cannot decode this media (often E-AC3/DTS/TrueHD audio). Use an AAC source or the app.',
+    decodeError: 'Browser does not support this audio track (E-AC3/DTS/TrueHD). Use Android/external player.',
+    remuxError: 'Web remux playback failed. Use Android/external player or retry.',
     retry: 'Retry',
   },
   dash: {

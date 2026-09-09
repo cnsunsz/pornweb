@@ -20,6 +20,8 @@ from ..services.subtitles import (
     find_track as subtitle_find_track,
     track_to_vtt,
 )
+from ..services.avprobe import probe_file
+from ..services.web_remux import iter_web_remux, ffmpeg_available
 
 router = APIRouter(prefix="/api/media", tags=["media"])
 
@@ -44,6 +46,12 @@ class MediaResponse(BaseModel):
     duration: float = 0
     progress: float = 0
     progress_part: int = 0
+    # Web playback hints (filled on detail; list may leave defaults)
+    container: str = ""
+    video_codec: str = ""
+    audio_codec: str = ""
+    audio_channels: int = 0
+    needs_audio_remux: bool = False
     
     class Config:
         from_attributes = True
@@ -92,7 +100,14 @@ def _public_fanart_url(item: MediaItem) -> str:
     return ""
 
 
-def _to_response(item: MediaItem, progress=None) -> MediaResponse:
+def _to_response(item: MediaItem, progress=None, probe: Optional[dict] = None) -> MediaResponse:
+    probe = probe or {}
+    # Heuristic for list cards: MKV without probe → prefer web remux path
+    needs = bool(probe.get("needs_audio_remux"))
+    if not probe.get("probed"):
+        name = (item.filename or item.file_path or "").lower()
+        if name.endswith(".mkv"):
+            needs = True
     return MediaResponse(
         id=item.id, title=item.title or item.filename,
         original_title=item.original_title or "", plot=item.plot or "",
@@ -106,6 +121,11 @@ def _to_response(item: MediaItem, progress=None) -> MediaResponse:
         duration=float(item.duration or 0),
         progress=float(progress.position) if progress else 0,
         progress_part=int(progress.part) if progress else 0,
+        container=str(probe.get("container") or ""),
+        video_codec=str(probe.get("video_codec") or ""),
+        audio_codec=str(probe.get("audio_codec") or ""),
+        audio_channels=int(probe.get("audio_channels") or 0),
+        needs_audio_remux=needs,
     )
 
 @router.get("/list", response_model=MediaListResponse)
@@ -192,7 +212,13 @@ async def get_detail(
         raise HTTPException(status_code=404, detail="媒体不存在")
     prow = db.execute(select(PlaybackProgress).where(
         PlaybackProgress.user_id == user.id, PlaybackProgress.media_id == media_id))
-    return _to_response(item, prow.scalar_one_or_none())
+    probe = {}
+    try:
+        video = _resolve_media_video(item, 0)
+        probe = probe_file(video)
+    except Exception:
+        probe = {}
+    return _to_response(item, prow.scalar_one_or_none(), probe=probe)
 
 async def _auth_user(request: Request, token: Optional[str], db: Session) -> Optional[User]:
     from ..core.security import decode_token
@@ -511,6 +537,77 @@ async def stream_media(
             "Cache-Control": "no-store",
         }
     )
+
+@router.get("/stream/{media_id}/web")
+async def stream_media_web(
+    media_id: int,
+    request: Request,
+    token: str = Query(None),
+    part: int = Query(0),
+    start: float = Query(0, ge=0),
+    audio: int = Query(0, ge=0),
+    db: Session = Depends(get_db),
+):
+    """Browser-oriented stream: copy video, transcode audio to AAC, fMP4 pipe.
+
+    Keeps raw `/api/media/stream/{id}` for Android / external players.
+    Designed for rclone: ffmpeg reads the path once and pipes; no full-file temp.
+    Seeking: pass `start` (seconds); client should reload src on seek when using remux.
+    """
+    user = await _auth_user(request, token, db)
+    if not user:
+        raise HTTPException(status_code=401, detail="未授权")
+    if not ffmpeg_available():
+        raise HTTPException(status_code=503, detail="服务器未安装 ffmpeg，无法网页转封装音轨")
+
+    result = db.execute(select(MediaItem).where(MediaItem.id == media_id))
+    item = result.scalar_one_or_none()
+    if not item:
+        raise HTTPException(status_code=404, detail="媒体不存在")
+
+    file_path = _resolve_media_video(item, part)
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="文件不存在")
+
+    probe = {}
+    try:
+        probe = probe_file(file_path)
+    except Exception:
+        probe = {}
+    audio_index = int(audio or 0)
+    audio_mode = "transcode"
+    if probe.get("remux_mode") == "copy":
+        audio_mode = "copy"
+        audio_index = int(probe.get("preferred_audio_index") or 0)
+    elif audio_index == 0 and probe.get("preferred_audio_index") is not None:
+        # keep requested index; default 0 transcodes first track
+        pass
+
+    def gen():
+        try:
+            yield from iter_web_remux(
+                file_path,
+                start_sec=float(start or 0),
+                audio_index=audio_index,
+                audio_mode=audio_mode,
+            )
+        except FileNotFoundError:
+            return
+        except RuntimeError as exc:
+            logger = __import__("logging").getLogger(__name__)
+            logger.warning("web remux: %s", exc)
+            return
+
+    return StreamingResponse(
+        gen(),
+        media_type="video/mp4",
+        headers={
+            "Cache-Control": "no-store",
+            "Accept-Ranges": "none",
+            "X-PornWeb-Remux": audio_mode,
+        },
+    )
+
 
 @router.post("/scan", response_model=ScanResponse)
 async def scan_media(

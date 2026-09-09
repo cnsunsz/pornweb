@@ -88,7 +88,8 @@ export default {
     subLoading: '加载字幕…',
     subExtracting: '正在提取内嵌字幕（网盘较慢，请稍候）…',
     playError: '播放失败，请重试',
-    decodeError: '浏览器无法解码该音视频（常见于 E-AC3/DTS/TrueHD 音轨），可换 AAC 源或用 App',
+    decodeError: '浏览器不支持该音轨(E-AC3/DTS/TrueHD)，请用安卓/外部播放器',
+    remuxError: '网页转封装播放失败，请用安卓/外部播放器或稍后重试',
     retry: '重试',
   },
   dash: {
