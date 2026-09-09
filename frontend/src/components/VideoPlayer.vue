@@ -137,9 +137,16 @@
                 v-for="tr in subtitleTracks"
                 :key="tr.id"
                 class="sub-item"
-                :class="{ active: selectedSubId === tr.id }"
+                :class="{ active: selectedSubId === tr.id, preparing: subPreparingId === tr.id }"
+                :disabled="tr.supported === false"
                 @click="selectSubtitle(tr.id)"
-              >{{ tr.label }}<span class="sub-meta">{{ tr.source === 'embedded' ? '内嵌' : '外挂' }}</span></button>
+              >
+                <span class="sub-label">{{ tr.label }}</span>
+                <span class="sub-meta">
+                  <template v-if="subPreparingId === tr.id">{{ t('player.subPreparingShort') }}</template>
+                  <template v-else>{{ tr.source === 'embedded' ? (tr.cached ? '内嵌·已缓存' : '内嵌') : '外挂' }}</template>
+                </span>
+              </button>
               <div v-if="!subtitleTracks.length" class="sub-empty">{{ subLoading ? t('player.subLoading') : t('player.subNone') }}</div>
             </div>
           </div>
@@ -162,7 +169,7 @@
 import { ref, onMounted, onUnmounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
-import { saveProgress, getSubtitles, getSubtitleUrl, getWebStreamUrl } from '@/api/media'
+import { saveProgress, getSubtitles, getSubtitleUrl, getWebStreamUrl, fetchSubtitleAsync, getSubtitleStatus } from '@/api/media'
 import { usePlayerPrefs } from '@/composables/usePlayerPrefs'
 
 const { t } = useI18n()
@@ -718,6 +725,10 @@ const subtitleTracks = ref([])
 const selectedSubId = ref(null)
 const subMenuOpen = ref(false)
 const subLoading = ref(false)
+const subPreparingId = ref(null)
+let subSelectGen = 0
+let subBlobUrl = null
+let subPollTimer = null
 
 function preferDefaultTrack(tracks) {
   // Only auto-enable cheap external sidecars. Embedded MKV extract on rclone
@@ -736,11 +747,25 @@ function preferDefaultTrack(tracks) {
   return sorted[0] || null
 }
 
+function revokeSubBlob() {
+  if (subBlobUrl) {
+    try { URL.revokeObjectURL(subBlobUrl) } catch {}
+    subBlobUrl = null
+  }
+}
+
+function stopSubPoll() {
+  if (subPollTimer) {
+    clearTimeout(subPollTimer)
+    subPollTimer = null
+  }
+}
+
 async function loadSubtitles() {
   if (!props.mediaId) {
     subtitleTracks.value = []
     selectedSubId.value = null
-    applySubtitleTrack(null)
+    await selectSubtitle(null)
     return
   }
   subLoading.value = true
@@ -748,11 +773,11 @@ async function loadSubtitles() {
     const { data } = await getSubtitles(props.mediaId, props.part || 0)
     subtitleTracks.value = data?.tracks || []
     const pref = preferDefaultTrack(subtitleTracks.value)
-    if (pref) selectSubtitle(pref.id)
-    else selectSubtitle(null)
+    if (pref) await selectSubtitle(pref.id)
+    else await selectSubtitle(null)
   } catch {
     subtitleTracks.value = []
-    selectSubtitle(null)
+    await selectSubtitle(null)
   } finally {
     subLoading.value = false
   }
@@ -761,7 +786,6 @@ async function loadSubtitles() {
 function clearVideoTracks() {
   const v = videoEl.value
   if (!v) return
-  // Remove previously injected <track> elements
   Array.from(v.querySelectorAll('track[data-pw-sub]')).forEach((el) => el.remove())
   if (v.textTracks) {
     for (let i = 0; i < v.textTracks.length; i++) {
@@ -770,41 +794,112 @@ function clearVideoTracks() {
   }
 }
 
-function applySubtitleTrack(trackId) {
+function attachVttBlob(vttText, meta) {
   const v = videoEl.value
-  if (!v) return
+  if (!v || !vttText) return
   clearVideoTracks()
-  if (!trackId || !props.mediaId) return
-  const url = getSubtitleUrl(props.mediaId, trackId, props.part || 0)
+  revokeSubBlob()
+  const blob = new Blob([vttText], { type: 'text/vtt' })
+  subBlobUrl = URL.createObjectURL(blob)
   const el = document.createElement('track')
   el.kind = 'subtitles'
-  el.label = 'PornWeb'
-  el.srclang = 'zh'
-  el.src = url
+  el.label = meta?.label || 'PornWeb'
+  el.srclang = (meta?.language || 'zh').slice(0, 8)
+  el.src = subBlobUrl
   el.default = true
   el.setAttribute('data-pw-sub', '1')
-  el.addEventListener('load', () => {
-    try {
-      if (el.track) el.track.mode = 'showing'
-    } catch {}
-  })
+  const show = () => {
+    try { if (el.track) el.track.mode = 'showing' } catch {}
+  }
+  el.addEventListener('load', show)
   v.appendChild(el)
-  // Some browsers need a tick
-  setTimeout(() => {
-    try {
-      if (el.track) el.track.mode = 'showing'
-    } catch {}
-  }, 50)
+  setTimeout(show, 50)
 }
 
-function selectSubtitle(trackId) {
+function sleep(ms) {
+  return new Promise((r) => { subPollTimer = setTimeout(r, ms) })
+}
+
+async function waitSubtitleReady(trackId, gen) {
+  // Poll status; extract runs in background with nice/ionice — do not touch video.src.
+  const part = props.part || 0
+  const started = Date.now()
+  const maxMs = 10 * 60 * 1000
+  while (gen === subSelectGen && Date.now() - started < maxMs) {
+    try {
+      const { data } = await getSubtitleStatus(props.mediaId, trackId, part)
+      if (gen !== subSelectGen) return false
+      if (data?.status === 'ready') return true
+      if (data?.status === 'error' || data?.status === 'unavailable') {
+        throw new Error(data?.error || 'subtitle failed')
+      }
+    } catch (e) {
+      if (gen !== subSelectGen) return false
+      // transient network — keep polling a bit
+      if (e?.message && /subtitle failed|图字幕|不支持/.test(e.message)) throw e
+    }
+    await sleep(2000)
+  }
+  return false
+}
+
+async function fetchReadyVtt(trackId) {
+  const res = await fetchSubtitleAsync(props.mediaId, trackId, props.part || 0)
+  if (res.status === 202) return null
+  const body = res.data
+  if (typeof body === 'string' && body.includes('WEBVTT')) return body
+  // unexpected JSON
+  return null
+}
+
+async function selectSubtitle(trackId) {
+  const gen = ++subSelectGen
+  stopSubPoll()
   selectedSubId.value = trackId
   subMenuOpen.value = false
+  subPreparingId.value = null
+  clearVideoTracks()
+  revokeSubBlob()
+  if (!trackId || !props.mediaId) return
+
   const meta = subtitleTracks.value.find((tr) => tr.id === trackId)
-  if (meta && meta.source === 'embedded') {
-    flashHint(t('player.subExtracting'))
+  if (meta && meta.supported === false) {
+    flashHint(meta.unsupported_reason || t('player.subExtractFail'))
+    selectedSubId.value = null
+    return
   }
-  applySubtitleTrack(trackId)
+
+  // External / already-cached: fetch VTT as text → blob URL (never hang <track> on extract).
+  const instant = !meta || meta.source === 'external' || meta.cached
+  if (!instant) {
+    subPreparingId.value = trackId
+    flashHint(t('player.subPreparing'))
+  }
+
+  try {
+    // Kick prepare (202) or get VTT (200) without blocking playback.
+    let vtt = await fetchReadyVtt(trackId)
+    if (gen !== subSelectGen) return
+    if (!vtt) {
+      subPreparingId.value = trackId
+      const ok = await waitSubtitleReady(trackId, gen)
+      if (gen !== subSelectGen) return
+      if (!ok) throw new Error('timeout')
+      vtt = await fetchReadyVtt(trackId)
+      if (gen !== subSelectGen) return
+      if (!vtt) throw new Error('empty')
+    }
+    attachVttBlob(vtt, meta)
+    // Mark cached in menu for next open
+    if (meta) meta.cached = true
+    subPreparingId.value = null
+  } catch (e) {
+    if (gen !== subSelectGen) return
+    subPreparingId.value = null
+    selectedSubId.value = null
+    clearVideoTracks()
+    flashHint(t('player.subExtractFail'))
+  }
 }
 
 onMounted(() => {
@@ -829,6 +924,9 @@ onUnmounted(() => {
   clearTimeout(controlsTimer)
   clearTimeout(longPressTimer)
   clearTimeout(hintTimer)
+  stopSubPoll()
+  subSelectGen += 1
+  revokeSubBlob()
   endRewind()
   if (props.mediaId && currentTime.value > 5) {
     saveProgress(props.mediaId, {
@@ -1035,7 +1133,10 @@ function formatTime(s) {
 }
 .sub-item:hover { background: rgba(255,255,255,0.08); }
 .sub-item.active { color: var(--accent); }
-.sub-meta { color: rgba(255,255,255,0.4); font-size: 11px; }
+.sub-meta { color: rgba(255,255,255,0.4); font-size: 11px; flex-shrink: 0; }
+.sub-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sub-item.preparing .sub-meta { color: var(--accent, #ffa31a); }
+.sub-item:disabled { opacity: 0.45; cursor: not-allowed; }
 .sub-empty { color: rgba(255,255,255,0.45); font-size: 12px; padding: 8px 14px; }
 
 /* HTML5 cue styling */

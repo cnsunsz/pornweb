@@ -1,5 +1,22 @@
 # Changelog
 
+## [v2.1.14] - 2026-09-09
+
+### 修复
+- **选字幕卡顿/全屏转圈**：点选内嵌字幕不再把 `<track src>` 直接挂到同步抽取 URL；改为 `?async=1` 非阻塞准备 → 菜单仅显示「准备中」→ 就绪后用 Blob URL 挂载，**播放不中断、无全屏 loading**
+- 内嵌抽取降优先级：`nice -n 19` + `ionice -c3`，全局并发默认 1（`MV_SUB_EXTRACT_MAX`），避免与网页 remux / Range 读抢 rclone 带宽
+- 同步抽取改为 `asyncio.to_thread`，避免长时间占死 uvicorn 事件循环
+
+### 新增
+- `GET /api/media/subtitles/{id}/{track_id}?async=1`：已缓存/外挂 → 200 WebVTT；未缓存内嵌 → **202** `{status:"preparing"}` 并后台 single-flight 提取
+- `GET /api/media/subtitles/{id}/{track_id}/status`：`ready|preparing|error|unavailable|idle`（Android 可同样轮询）
+- 字幕列表项增加 `cached` 字段（外挂恒为 true；内嵌已落盘 subcache 为 true）
+
+### 说明
+- 默认无 `async` 仍为同步等待（兼容旧客户端）；**建议 Android 改用 async+status**，避免选轨时拖垮播放
+- 外挂 sidecar 仍即时可用；二次点选已缓存内嵌轨秒开
+
+
 ## [v2.1.13] - 2026-09-09
 
 ### 新增

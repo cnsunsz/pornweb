@@ -31,6 +31,24 @@ export function getSubtitleUrl(id, trackId, part = 0) {
   return `/api/media/subtitles/${id}/${encodeURIComponent(trackId)}?token=${tokenQ()}&part=${part || 0}`
 }
 
+/** Non-blocking: 200=VTT text, 202=preparing (does not wait on rclone extract). */
+export function fetchSubtitleAsync(id, trackId, part = 0) {
+  return api.get(`/media/subtitles/${id}/${encodeURIComponent(trackId)}`, {
+    params: { part: part || 0, async: 1 },
+    // VTT is text; 202 JSON uses transform below via responseType default json —
+    // ask for text and parse JSON when 202.
+    responseType: 'text',
+    transformResponse: [(data) => data],
+    validateStatus: (s) => (s >= 200 && s < 300) || s === 202,
+  })
+}
+
+export function getSubtitleStatus(id, trackId, part = 0) {
+  return api.get(`/media/subtitles/${id}/${encodeURIComponent(trackId)}/status`, {
+    params: { part: part || 0 },
+  })
+}
+
 export function getPosterUrl(id) {
   return `/api/media/poster/${id}?token=${tokenQ()}`
 }

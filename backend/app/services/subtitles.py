@@ -61,6 +61,10 @@ _warming: set = set()
 _extract_lock = threading.Lock()
 _extract_events: Dict[str, threading.Event] = {}
 _extract_results: Dict[str, Tuple[Optional[str], Optional[str]]] = {}
+_prep_requested: set = set()
+# Cap concurrent embedded extracts so remux/Range reads stay responsive.
+EXTRACT_MAX = max(1, int(os.environ.get("MV_SUB_EXTRACT_MAX", "1")))
+_extract_sem = threading.Semaphore(EXTRACT_MAX)
 
 
 def _stable_id(kind: str, key: str) -> str:
@@ -217,8 +221,18 @@ def list_tracks(video: Path) -> List[Dict[str, Any]]:
     # public payload without absolute paths
     out = []
     for t in ext + emb:
+        tid = t["id"]
+        if t.get("source") == "external":
+            cached = True
+        elif t.get("supported", True) is False:
+            cached = False
+        else:
+            try:
+                cached = bool(_read_cache(tid, Path(t["path"])))
+            except Exception:
+                cached = False
         out.append({
-            "id": t["id"],
+            "id": tid,
             "label": t["label"],
             "language": t["language"],
             "format": t["format"],
@@ -226,6 +240,7 @@ def list_tracks(video: Path) -> List[Dict[str, Any]]:
             "index": t.get("index"),
             "supported": t.get("supported", True),
             "unsupported_reason": t.get("unsupported_reason"),
+            "cached": cached,
         })
     # Optional warm (off by default): concurrent mkvextract/ffmpeg on rclone
     # starves video Range reads and causes endless buffering spinner.
@@ -364,6 +379,18 @@ def _write_cache(track_id: str, video: Path, vtt: str) -> None:
         logger.exception("subtitle cache write failed")
 
 
+
+def _prio_cmd(cmd: list) -> list:
+    """Run extract tools at idle I/O + low CPU so video Range/remux win."""
+    out: list = []
+    if shutil.which("nice"):
+        out += ["nice", "-n", "19"]
+    if shutil.which("ionice"):
+        # best-effort idle class; ignore if kernel lacks CFQ/BFQ ionice
+        out += ["ionice", "-c3"]
+    return out + list(cmd)
+
+
 def _mkvextract_srt(video: Path, stream_index: int, out_srt: Path) -> Tuple[bool, str]:
     mkvextract = shutil.which("mkvextract")
     if not mkvextract:
@@ -374,7 +401,7 @@ def _mkvextract_srt(video: Path, stream_index: int, out_srt: Path) -> Tuple[bool
     if mkvmerge:
         try:
             ident = subprocess.run(
-                [mkvmerge, "-J", str(video)],
+                _prio_cmd([mkvmerge, "-J", str(video)]),
                 capture_output=True, text=True, timeout=60,
             )
             if ident.returncode == 0 and ident.stdout:
@@ -395,7 +422,7 @@ def _mkvextract_srt(video: Path, stream_index: int, out_srt: Path) -> Tuple[bool
             logger.debug("mkvmerge -J failed: %s", e)
     try:
         proc = subprocess.run(
-            [mkvextract, "tracks", str(video), f"{tid}:{out_srt}"],
+            _prio_cmd([mkvextract, "tracks", str(video), f"{tid}:{out_srt}"]),
             capture_output=True, text=True, timeout=EXTRACT_TIMEOUT_SEC,
         )
         if proc.returncode != 0:
@@ -434,7 +461,7 @@ def _ffmpeg_extract_srt_or_vtt(video: Path, stream_index: int, sub_index: Option
                     "-c:s", "srt", str(out_path), "-y",
                 ]
             proc = subprocess.run(
-                cmd, capture_output=True, text=True, timeout=EXTRACT_TIMEOUT_SEC,
+                _prio_cmd(cmd), capture_output=True, text=True, timeout=EXTRACT_TIMEOUT_SEC,
             )
             if proc.returncode == 0 and out_path.is_file() and out_path.stat().st_size > 4:
                 return True, ""
@@ -450,7 +477,7 @@ def _ffmpeg_extract_srt_or_vtt(video: Path, stream_index: int, sub_index: Option
 
 
 def _ffmpeg_extract_vtt_inner(video: Path, stream_index: int, sub_index: Optional[int], track_id: str) -> Tuple[Optional[str], Optional[str]]:
-    """Actual extract worker (no single-flight)."""
+    """Actual extract worker (no single-flight). Uses low I/O priority + global concurrency cap."""
     if track_id:
         cached = _read_cache(track_id, video)
         if cached:
@@ -460,6 +487,21 @@ def _ffmpeg_extract_vtt_inner(video: Path, stream_index: int, sub_index: Optiona
     mkvextract = shutil.which("mkvextract")
     if not ffmpeg and not mkvextract:
         return None, "需要 ffmpeg 或 mkvextract 才能提取内嵌字幕"
+
+    # Wait for a slot without starving forever; callers still have EXTRACT_TIMEOUT.
+    if not _extract_sem.acquire(timeout=EXTRACT_TIMEOUT_SEC + 60):
+        return None, "字幕提取队列繁忙，请稍后重试"
+    try:
+        return _ffmpeg_extract_vtt_locked(video, stream_index, sub_index, track_id)
+    finally:
+        _extract_sem.release()
+
+
+def _ffmpeg_extract_vtt_locked(video: Path, stream_index: int, sub_index: Optional[int], track_id: str) -> Tuple[Optional[str], Optional[str]]:
+    if track_id:
+        cached = _read_cache(track_id, video)
+        if cached:
+            return cached, None
 
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
     work = CACHE_DIR / f"work_{os.getpid()}_{stream_index}_{threading.get_ident()}"
@@ -597,6 +639,87 @@ def _schedule_warm(video: Path, emb_tracks: List[Dict[str, Any]]) -> None:
                     _warming.discard(track["id"])
 
         threading.Thread(target=_run, name=f"subwarm-{tid[:12]}", daemon=True).start()
+
+
+
+def track_is_ready(track: Dict[str, Any]) -> bool:
+    """True if VTT can be served without a long extract."""
+    if track.get("supported") is False:
+        return False
+    if track.get("source") == "external":
+        return True
+    tid = str(track.get("id") or "")
+    if not tid:
+        return False
+    try:
+        return bool(_read_cache(tid, Path(track["path"])))
+    except Exception:
+        return False
+
+
+def track_status(track: Dict[str, Any]) -> Dict[str, Any]:
+    """ready | preparing | error | unavailable | idle — never blocks on extract."""
+    tid = str(track.get("id") or "")
+    if track.get("supported") is False or _is_image_codec(str(track.get("format") or "")):
+        return {
+            "status": "unavailable",
+            "cached": False,
+            "track_id": tid,
+            "error": track.get("unsupported_reason") or "不支持图字幕（PGS/VobSub），无法转为 WebVTT",
+        }
+    if track.get("source") == "external":
+        return {"status": "ready", "cached": True, "track_id": tid, "error": None}
+    video = Path(track["path"])
+    if tid and _read_cache(tid, video):
+        return {"status": "ready", "cached": True, "track_id": tid, "error": None}
+    with _extract_lock:
+        preparing = (
+            tid in _extract_events
+            or tid in _prep_requested
+            or tid in _warming
+        )
+        if tid in _extract_results:
+            vtt, err = _extract_results[tid]
+            if err:
+                return {"status": "error", "cached": False, "track_id": tid, "error": err}
+            if vtt:
+                return {"status": "ready", "cached": True, "track_id": tid, "error": None}
+    if preparing:
+        return {"status": "preparing", "cached": False, "track_id": tid, "error": None}
+    return {"status": "idle", "cached": False, "track_id": tid, "error": None}
+
+
+def prepare_track(track: Dict[str, Any]) -> Dict[str, Any]:
+    """Start background extract if needed; return status immediately (non-blocking)."""
+    st = track_status(track)
+    if st["status"] in ("ready", "unavailable", "error", "preparing"):
+        return st
+    if track.get("source") != "embedded":
+        return st
+    tid = str(track.get("id") or "")
+    if not tid:
+        return {"status": "error", "cached": False, "track_id": tid, "error": "缺少 track_id"}
+    with _extract_lock:
+        if tid in _extract_events or tid in _prep_requested or tid in _warming:
+            return {"status": "preparing", "cached": False, "track_id": tid, "error": None}
+        _prep_requested.add(tid)
+
+    def _run(tr=track, track_id=tid):
+        try:
+            ffmpeg_extract_vtt(
+                Path(tr["path"]),
+                int(tr["index"]),
+                tr.get("sub_index"),
+                track_id=track_id,
+            )
+        except Exception:
+            logger.exception("prepare extract failed for %s", track_id)
+        finally:
+            with _extract_lock:
+                _prep_requested.discard(track_id)
+
+    threading.Thread(target=_run, name=f"subprep-{tid[:12]}", daemon=True).start()
+    return {"status": "preparing", "cached": False, "track_id": tid, "error": None}
 
 
 def track_to_vtt(track: Dict[str, Any]) -> Tuple[str, Optional[str]]:

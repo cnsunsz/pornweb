@@ -1,8 +1,9 @@
 import os
+import asyncio
 import json
 from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from fastapi.responses import StreamingResponse, FileResponse, Response
+from fastapi.responses import StreamingResponse, FileResponse, Response, JSONResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import select, func, or_, desc
 from pydantic import BaseModel
@@ -19,6 +20,8 @@ from ..services.subtitles import (
     list_tracks as subtitle_list_tracks,
     find_track as subtitle_find_track,
     track_to_vtt,
+    track_status as subtitle_track_status,
+    prepare_track as subtitle_prepare_track,
 )
 from ..services.avprobe import probe_file
 from ..services.web_remux import iter_web_remux, ffmpeg_available
@@ -365,6 +368,14 @@ class SubtitleTrack(BaseModel):
     index: Optional[int] = None
     supported: bool = True
     unsupported_reason: Optional[str] = None
+    cached: bool = False
+
+
+class SubtitleStatusResponse(BaseModel):
+    status: str
+    cached: bool = False
+    track_id: str = ""
+    error: Optional[str] = None
 
 
 class SubtitleListResponse(BaseModel):
@@ -400,6 +411,38 @@ async def list_subtitles(
     return SubtitleListResponse(tracks=[SubtitleTrack(**t) for t in tracks])
 
 
+def _subtitle_http_error(detail: str) -> HTTPException:
+    code = 415 if "图字幕" in detail else 422
+    if "超时" in detail:
+        code = 504
+    return HTTPException(status_code=code, detail=detail)
+
+
+@router.get("/subtitles/{media_id}/{track_id}/status", response_model=SubtitleStatusResponse)
+async def get_subtitle_status(
+    media_id: int,
+    track_id: str,
+    request: Request,
+    token: str = Query(None),
+    part: int = Query(0),
+    db: Session = Depends(get_db),
+):
+    """Non-blocking status for seamless subtitle UX (web + Android)."""
+    user = await _auth_user(request, token, db)
+    if not user:
+        raise HTTPException(status_code=401, detail="未授权")
+    result = db.execute(select(MediaItem).where(MediaItem.id == media_id))
+    item = result.scalar_one_or_none()
+    if not item:
+        raise HTTPException(status_code=404, detail="媒体不存在")
+    video = _resolve_media_video(item, part)
+    track = subtitle_find_track(video, track_id)
+    if not track:
+        raise HTTPException(status_code=404, detail="字幕轨不存在")
+    st = await asyncio.to_thread(subtitle_track_status, track)
+    return SubtitleStatusResponse(**st)
+
+
 @router.get("/subtitles/{media_id}/{track_id}")
 async def get_subtitle_track(
     media_id: int,
@@ -407,6 +450,7 @@ async def get_subtitle_track(
     request: Request,
     token: str = Query(None),
     part: int = Query(0),
+    async_mode: int = Query(0, alias="async", description="1=非阻塞：未缓存内嵌返回 202 并后台提取"),
     db: Session = Depends(get_db),
 ):
     user = await _auth_user(request, token, db)
@@ -425,14 +469,31 @@ async def get_subtitle_track(
             status_code=415,
             detail=track.get("unsupported_reason") or "不支持图字幕（PGS/VobSub），无法转为 WebVTT",
         )
-    vtt, err = track_to_vtt(track)
+
+    # Seamless path: never block the player on rclone extract.
+    if async_mode:
+        st = await asyncio.to_thread(subtitle_prepare_track, track)
+        if st.get("status") == "unavailable":
+            raise HTTPException(status_code=415, detail=st.get("error") or "不支持该字幕")
+        if st.get("status") == "error":
+            raise _subtitle_http_error(st.get("error") or "无法转换字幕")
+        if st.get("status") != "ready":
+            return JSONResponse(
+                status_code=202,
+                content={
+                    "status": "preparing",
+                    "cached": False,
+                    "track_id": track_id,
+                    "error": None,
+                    "message": "字幕准备中",
+                },
+            )
+        # fall through to serve cached/external VTT
+
+    vtt, err = await asyncio.to_thread(track_to_vtt, track)
     if err or not vtt:
-        # 415 for image/bitmap; 504-ish message for timeout; else 422
         detail = err or "无法转换字幕"
-        code = 415 if "图字幕" in detail else 422
-        if "超时" in detail:
-            code = 504
-        raise HTTPException(status_code=code, detail=detail)
+        raise _subtitle_http_error(detail)
     return Response(
         content=vtt,
         media_type="text/vtt; charset=utf-8",
