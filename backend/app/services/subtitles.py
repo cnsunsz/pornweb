@@ -3,14 +3,30 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import os
 import re
 import shutil
 import subprocess
+import threading
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+logger = logging.getLogger(__name__)
+
 SUB_EXTS = {".srt", ".ass", ".ssa", ".vtt", ".sub"}
+# Image / bitmap subtitle codecs — list them but do not attempt WebVTT conversion.
+IMAGE_SUB_CODECS = {
+    "hdmv_pgs_subtitle", "pgs", "pgssub",
+    "dvd_subtitle", "dvdsub", "vobsub",
+    "xsub", "dvb_subtitle", "dvb_teletext",
+}
+# Text codecs we expect ffmpeg/mkvextract to turn into SRT/VTT.
+TEXT_SUB_CODECS = {
+    "subrip", "srt", "ass", "ssa", "mov_text", "text",
+    "webvtt", "ttml", "timed_text", "eia_608", "closed_caption",
+}
+
 LANG_ALIASES = {
     "zh": "zh", "chi": "zh", "chs": "zh-Hans", "cht": "zh-Hant",
     "zh-cn": "zh-Hans", "zh-tw": "zh-Hant", "zh-hans": "zh-Hans", "zh-hant": "zh-Hant",
@@ -32,6 +48,15 @@ LANG_LABELS = {
     "fr": "Français", "de": "Deutsch", "es": "Español",
     "ru": "Русский", "pt": "Português", "it": "Italiano", "und": "未知",
 }
+
+# rclone/FUSE MKV demux of a full text track can take several minutes.
+EXTRACT_TIMEOUT_SEC = int(os.environ.get("MV_SUB_EXTRACT_TIMEOUT", "600"))
+CACHE_DIR = Path(os.environ.get(
+    "MV_SUB_CACHE_DIR",
+    str(Path(__file__).resolve().parents[2] / "data" / "subcache"),
+))
+_warm_lock = threading.Lock()
+_warming: set = set()
 
 
 def _stable_id(kind: str, key: str) -> str:
@@ -118,8 +143,19 @@ def discover_external(video: Path) -> List[Dict[str, Any]]:
             "format": p.suffix.lower().lstrip("."),
             "source": "external",
             "path": key,
+            "supported": True,
+            "unsupported_reason": None,
         })
     return tracks
+
+
+def _is_image_codec(codec: str) -> bool:
+    c = (codec or "").lower()
+    if c in IMAGE_SUB_CODECS:
+        return True
+    if "pgs" in c or "vobsub" in c or "dvd_sub" in c or "hdmv" in c:
+        return True
+    return False
 
 
 def discover_embedded(video: Path) -> List[Dict[str, Any]]:
@@ -140,7 +176,7 @@ def discover_embedded(video: Path) -> List[Dict[str, Any]]:
     except Exception:
         return []
     tracks = []
-    for stream in data.get("streams") or []:
+    for sub_order, stream in enumerate(data.get("streams") or []):
         idx = stream.get("index")
         if idx is None:
             continue
@@ -150,6 +186,11 @@ def discover_embedded(video: Path) -> List[Dict[str, Any]]:
         title = tags.get("title") or tags.get("TITLE") or ""
         label = title or LANG_LABELS.get(lang, lang)
         codec = (stream.get("codec_name") or "subrip").lower()
+        image = _is_image_codec(codec)
+        supported = not image
+        reason = "不支持图字幕（PGS/VobSub），请使用外挂 SRT/ASS" if image else None
+        if image and "图字幕" not in label:
+            label = f"{label} [图字幕不可用]"
         tid = _stable_id("emb", f"{video.resolve()}:{idx}")
         tracks.append({
             "id": tid,
@@ -158,7 +199,10 @@ def discover_embedded(video: Path) -> List[Dict[str, Any]]:
             "format": codec,
             "source": "embedded",
             "index": int(idx),
+            "sub_index": int(sub_order),  # for -map 0:s:N
             "path": str(video.resolve()),
+            "supported": supported,
+            "unsupported_reason": reason,
         })
     return tracks
 
@@ -176,7 +220,14 @@ def list_tracks(video: Path) -> List[Dict[str, Any]]:
             "format": t["format"],
             "source": t["source"],
             "index": t.get("index"),
+            "supported": t.get("supported", True),
+            "unsupported_reason": t.get("unsupported_reason"),
         })
+    # Warm cache for preferred Chinese / English text embeds in background
+    try:
+        _schedule_warm(video, emb)
+    except Exception:
+        logger.exception("subtitle warm schedule failed")
     return out
 
 
@@ -274,26 +325,225 @@ def ass_to_vtt_rough(text: str) -> str:
     return "\n".join(cues)
 
 
-def ffmpeg_extract_vtt(video: Path, stream_index: int) -> Optional[str]:
-    ffmpeg = shutil.which("ffmpeg")
-    if not ffmpeg:
-        return None
+def _cache_path(track_id: str, video: Path) -> Path:
+    try:
+        mtime = int(video.stat().st_mtime)
+    except OSError:
+        mtime = 0
+    safe = re.sub(r"[^a-zA-Z0-9._-]", "_", track_id)
+    return CACHE_DIR / f"{safe}.{mtime}.vtt"
+
+
+def _read_cache(track_id: str, video: Path) -> Optional[str]:
+    path = _cache_path(track_id, video)
+    if path.is_file() and path.stat().st_size > 8:
+        try:
+            return path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            return None
+    return None
+
+
+def _write_cache(track_id: str, video: Path, vtt: str) -> None:
+    if not vtt or "WEBVTT" not in vtt:
+        return
+    try:
+        CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        path = _cache_path(track_id, video)
+        tmp = path.with_suffix(".tmp")
+        tmp.write_text(vtt, encoding="utf-8")
+        tmp.replace(path)
+    except OSError:
+        logger.exception("subtitle cache write failed")
+
+
+def _mkvextract_srt(video: Path, stream_index: int, out_srt: Path) -> Tuple[bool, str]:
+    mkvextract = shutil.which("mkvextract")
+    if not mkvextract:
+        return False, "no mkvextract"
+    # Prefer JSON identify so track id matches Matroska TID (usually == ffprobe index).
+    tid = stream_index
+    mkvmerge = shutil.which("mkvmerge")
+    if mkvmerge:
+        try:
+            ident = subprocess.run(
+                [mkvmerge, "-J", str(video)],
+                capture_output=True, text=True, timeout=60,
+            )
+            if ident.returncode == 0 and ident.stdout:
+                data = json.loads(ident.stdout)
+                # Prefer matching by properties.number == ffprobe index when present
+                for t in data.get("tracks") or []:
+                    if t.get("type") != "subtitles":
+                        continue
+                    props = t.get("properties") or {}
+                    num = props.get("number")
+                    if num is not None and int(num) == int(stream_index):
+                        tid = int(t["id"])
+                        break
+                else:
+                    # fallback: ffprobe absolute index often equals mkvextract id on simple files
+                    tid = stream_index
+        except Exception as e:
+            logger.debug("mkvmerge -J failed: %s", e)
     try:
         proc = subprocess.run(
-            [
-                ffmpeg, "-v", "error", "-i", str(video),
-                "-map", f"0:{stream_index}", "-f", "webvtt", "-",
-            ],
-            capture_output=True, text=True, timeout=120,
+            [mkvextract, "tracks", str(video), f"{tid}:{out_srt}"],
+            capture_output=True, text=True, timeout=EXTRACT_TIMEOUT_SEC,
         )
         if proc.returncode != 0:
-            return None
-        out = proc.stdout or ""
-        if "WEBVTT" not in out:
-            return "WEBVTT\n\n" + out
-        return out
-    except Exception:
-        return None
+            err = (proc.stderr or proc.stdout or "").strip()[:300]
+            return False, err or f"mkvextract rc={proc.returncode}"
+        if not out_srt.is_file() or out_srt.stat().st_size < 4:
+            return False, "mkvextract produced empty file"
+        return True, ""
+    except subprocess.TimeoutExpired:
+        return False, f"mkvextract 超时（>{EXTRACT_TIMEOUT_SEC}s，网盘文件抽取较慢）"
+    except Exception as e:
+        return False, str(e)
+
+
+def _ffmpeg_extract_srt_or_vtt(video: Path, stream_index: int, sub_index: Optional[int], out_path: Path, as_vtt: bool) -> Tuple[bool, str]:
+    ffmpeg = shutil.which("ffmpeg")
+    if not ffmpeg:
+        return False, "未安装 ffmpeg"
+    # Prefer absolute map 0:N (ffprobe index); also try 0:s:N (subtitle order).
+    map_candidates = [f"0:{stream_index}"]
+    if sub_index is not None:
+        map_candidates.append(f"0:s:{sub_index}")
+    last_err = ""
+    for map_sel in map_candidates:
+        try:
+            if as_vtt:
+                cmd = [
+                    ffmpeg, "-nostdin", "-v", "error",
+                    "-i", str(video), "-map", map_sel,
+                    "-f", "webvtt", str(out_path), "-y",
+                ]
+            else:
+                cmd = [
+                    ffmpeg, "-nostdin", "-v", "error",
+                    "-i", str(video), "-map", map_sel,
+                    "-c:s", "srt", str(out_path), "-y",
+                ]
+            proc = subprocess.run(
+                cmd, capture_output=True, text=True, timeout=EXTRACT_TIMEOUT_SEC,
+            )
+            if proc.returncode == 0 and out_path.is_file() and out_path.stat().st_size > 4:
+                return True, ""
+            last_err = (proc.stderr or "").strip()[:300] or f"ffmpeg rc={proc.returncode} map={map_sel}"
+            # try next map
+        except subprocess.TimeoutExpired:
+            last_err = f"ffmpeg 超时（>{EXTRACT_TIMEOUT_SEC}s，网盘 MKV 抽取较慢，请稍后重试）"
+            break
+        except Exception as e:
+            last_err = str(e)
+            break
+    return False, last_err
+
+
+def ffmpeg_extract_vtt(video: Path, stream_index: int, sub_index: Optional[int] = None, track_id: str = "") -> Tuple[Optional[str], Optional[str]]:
+    """Extract embedded text subtitles to WebVTT. Returns (vtt, error_detail)."""
+    if track_id:
+        cached = _read_cache(track_id, video)
+        if cached:
+            return cached, None
+
+    ffmpeg = shutil.which("ffmpeg")
+    mkvextract = shutil.which("mkvextract")
+    if not ffmpeg and not mkvextract:
+        return None, "需要 ffmpeg 或 mkvextract 才能提取内嵌字幕"
+
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    work = CACHE_DIR / f"work_{os.getpid()}_{stream_index}"
+    srt_path = work.with_suffix(".srt")
+    vtt_path = work.with_suffix(".vtt")
+    try:
+        # 1) mkvextract for Matroska (often more reliable; still slow on rclone)
+        if video.suffix.lower() in (".mkv", ".mka", ".mks") and mkvextract:
+            ok, err = _mkvextract_srt(video, stream_index, srt_path)
+            if ok:
+                text = _read_text(srt_path)
+                vtt = srt_to_vtt(text) if "-->" in text else None
+                if vtt and "WEBVTT" in vtt:
+                    if track_id:
+                        _write_cache(track_id, video, vtt)
+                    return vtt, None
+            else:
+                logger.info("mkvextract failed (%s), falling back to ffmpeg", err)
+
+        # 2) ffmpeg → srt then convert (avoids webvtt muxer buffering quirks)
+        ok, err = _ffmpeg_extract_srt_or_vtt(video, stream_index, sub_index, srt_path, as_vtt=False)
+        if ok:
+            text = _read_text(srt_path)
+            if "-->" in text:
+                vtt = srt_to_vtt(text)
+                if track_id:
+                    _write_cache(track_id, video, vtt)
+                return vtt, None
+
+        # 3) ffmpeg direct webvtt
+        ok, err2 = _ffmpeg_extract_srt_or_vtt(video, stream_index, sub_index, vtt_path, as_vtt=True)
+        if ok:
+            vtt = _read_text(vtt_path)
+            if "WEBVTT" not in vtt:
+                vtt = "WEBVTT\n\n" + vtt
+            if track_id:
+                _write_cache(track_id, video, vtt)
+            return vtt, None
+
+        return None, err2 or err or "提取内嵌字幕失败"
+    finally:
+        for p in (srt_path, vtt_path):
+            try:
+                if p.exists():
+                    p.unlink()
+            except OSError:
+                pass
+
+
+def _lang_priority(lang: str) -> int:
+    l = (lang or "").lower()
+    if l.startswith("zh"):
+        return 0
+    if l in ("chi", "chs", "cht"):
+        return 0
+    if l.startswith("en") or l == "eng":
+        return 1
+    return 9
+
+
+def _schedule_warm(video: Path, emb_tracks: List[Dict[str, Any]]) -> None:
+    """Background-extract up to 2 preferred text tracks so first play is warmer."""
+    text_tracks = [t for t in emb_tracks if t.get("supported", True)]
+    if not text_tracks:
+        return
+    text_tracks.sort(key=lambda t: (_lang_priority(t.get("language") or ""), t.get("index") or 0))
+    chosen = text_tracks[:2]
+    for t in chosen:
+        tid = t["id"]
+        if _read_cache(tid, video):
+            continue
+        with _warm_lock:
+            if tid in _warming:
+                continue
+            _warming.add(tid)
+
+        def _run(track=t):
+            try:
+                ffmpeg_extract_vtt(
+                    Path(track["path"]),
+                    int(track["index"]),
+                    track.get("sub_index"),
+                    track_id=track["id"],
+                )
+            except Exception:
+                logger.exception("warm extract failed for %s", track.get("id"))
+            finally:
+                with _warm_lock:
+                    _warming.discard(track["id"])
+
+        threading.Thread(target=_run, name=f"subwarm-{tid[:12]}", daemon=True).start()
 
 
 def track_to_vtt(track: Dict[str, Any]) -> Tuple[str, Optional[str]]:
@@ -318,10 +568,14 @@ def track_to_vtt(track: Dict[str, Any]) -> Tuple[str, Optional[str]]:
             return ass_to_vtt_rough(text), None
         return "", f"不支持的字幕格式: {fmt}"
     if source == "embedded":
+        if track.get("supported") is False or _is_image_codec(str(track.get("format") or "")):
+            return "", track.get("unsupported_reason") or "不支持图字幕（PGS/VobSub），无法转为 WebVTT"
         video = Path(track["path"])
         idx = int(track["index"])
-        vtt = ffmpeg_extract_vtt(video, idx)
+        vtt, err = ffmpeg_extract_vtt(
+            video, idx, track.get("sub_index"), track_id=str(track.get("id") or ""),
+        )
         if vtt is None:
-            return "", "需要 ffmpeg 才能提取内嵌字幕"
+            return "", err or "提取内嵌字幕失败"
         return vtt, None
     return "", "未知字幕源"

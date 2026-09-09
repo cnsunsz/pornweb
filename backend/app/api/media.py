@@ -337,6 +337,8 @@ class SubtitleTrack(BaseModel):
     format: str
     source: str
     index: Optional[int] = None
+    supported: bool = True
+    unsupported_reason: Optional[str] = None
 
 
 class SubtitleListResponse(BaseModel):
@@ -392,13 +394,23 @@ async def get_subtitle_track(
     track = subtitle_find_track(video, track_id)
     if not track:
         raise HTTPException(status_code=404, detail="字幕轨不存在")
+    if track.get("supported") is False:
+        raise HTTPException(
+            status_code=415,
+            detail=track.get("unsupported_reason") or "不支持图字幕（PGS/VobSub），无法转为 WebVTT",
+        )
     vtt, err = track_to_vtt(track)
     if err or not vtt:
-        raise HTTPException(status_code=422, detail=err or "无法转换字幕")
+        # 415 for image/bitmap; 504-ish message for timeout; else 422
+        detail = err or "无法转换字幕"
+        code = 415 if "图字幕" in detail else 422
+        if "超时" in detail:
+            code = 504
+        raise HTTPException(status_code=code, detail=detail)
     return Response(
         content=vtt,
         media_type="text/vtt; charset=utf-8",
-        headers={"Cache-Control": "private, max-age=60"},
+        headers={"Cache-Control": "private, max-age=3600"},
     )
 
 
