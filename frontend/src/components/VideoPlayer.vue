@@ -21,12 +21,12 @@
       @pause="isPaused = true"
       @ended="onEnded"
       @volumechange="onVolumeChange"
-      @waiting="isBuffering = true"
-      @canplay="isBuffering = false"
+      @waiting="onVideoWaiting"
+      @canplay="onVideoCanPlay"
       @error="onError"
     />
 
-    <div v-if="isBuffering && !playError" class="buffering">
+    <div v-if="showFullscreenBuffering" class="buffering">
       <div class="spinner"></div>
     </div>
 
@@ -166,10 +166,10 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, watch } from 'vue'
+import { ref, onMounted, onUnmounted, watch, computed} from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
-import { saveProgress, getSubtitles, getSubtitleUrl, getWebStreamUrl, fetchSubtitleAsync, getSubtitleStatus } from '@/api/media'
+import { saveProgress, getSubtitles, getSubtitleUrl, getWebStreamUrl, fetchSubtitleAsync, getSubtitleStatus, setSubtitleIoPriority } from '@/api/media'
 import { usePlayerPrefs } from '@/composables/usePlayerPrefs'
 
 const { t } = useI18n()
@@ -726,6 +726,8 @@ const selectedSubId = ref(null)
 const subMenuOpen = ref(false)
 const subLoading = ref(false)
 const subPreparingId = ref(null)
+// Hide fullscreen spinner while subtitle extract is in flight for this player.
+const showFullscreenBuffering = computed(() => isBuffering.value && !playError.value && !subPreparingId.value)
 let subSelectGen = 0
 let subBlobUrl = null
 let subPollTimer = null
@@ -852,7 +854,36 @@ async function fetchReadyVtt(trackId) {
   return null
 }
 
+
+function onVideoWaiting() {
+  // Background mkvextract/ffmpeg on rclone can starve video Range → @waiting.
+  // While we are preparing a subtitle for THIS player, do not fullscreen-spinner;
+  // keep trying to play; menu/hint already show 「准备中」.
+  if (subPreparingId.value) {
+    isBuffering.value = false
+    setExtractYield(true)
+    try { videoEl.value?.play()?.catch(() => {}) } catch {}
+    return
+  }
+  isBuffering.value = true
+}
+
+function onVideoCanPlay() {
+  isBuffering.value = false
+  setExtractYield(false)
+}
+
+let extractYieldOn = false
+function setExtractYield(preferVideo) {
+  if (!!preferVideo === extractYieldOn) return
+  extractYieldOn = !!preferVideo
+  try {
+    setSubtitleIoPriority(preferVideo).catch(() => {})
+  } catch {}
+}
+
 async function selectSubtitle(trackId) {
+  // v2.1.15: never call video.load() or change video.src — VTT via Blob URL only.
   const gen = ++subSelectGen
   stopSubPoll()
   selectedSubId.value = trackId
@@ -893,9 +924,11 @@ async function selectSubtitle(trackId) {
     // Mark cached in menu for next open
     if (meta) meta.cached = true
     subPreparingId.value = null
+    setExtractYield(false)
   } catch (e) {
     if (gen !== subSelectGen) return
     subPreparingId.value = null
+    setExtractYield(false)
     selectedSubId.value = null
     clearVideoTracks()
     flashHint(t('player.subExtractFail'))
@@ -918,6 +951,7 @@ function onDocClick() {
 }
 
 onUnmounted(() => {
+  setExtractYield(false)
   document.removeEventListener('keydown', onKeydown)
   document.removeEventListener('keyup', onKeyup)
   document.removeEventListener('click', onDocClick)

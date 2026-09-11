@@ -7,6 +7,7 @@ import logging
 import os
 import re
 import shutil
+import signal
 import subprocess
 import threading
 import time
@@ -65,6 +66,11 @@ _prep_requested: set = set()
 # Cap concurrent embedded extracts so remux/Range reads stay responsive.
 EXTRACT_MAX = max(1, int(os.environ.get("MV_SUB_EXTRACT_MAX", "1")))
 _extract_sem = threading.Semaphore(EXTRACT_MAX)
+
+# Active extract process groups — paused (SIGSTOP) when player reports waiting.
+_active_extract_pgids: set = set()
+_extract_yield_video = False
+_extract_pg_lock = threading.Lock()
 
 
 def _stable_id(kind: str, key: str) -> str:
@@ -380,6 +386,92 @@ def _write_cache(track_id: str, video: Path, vtt: str) -> None:
 
 
 
+
+def set_extract_yield_to_video(prefer_video: bool) -> Dict[str, Any]:
+    """Pause (SIGSTOP) or resume (SIGCONT) in-flight mkvextract/ffmpeg process groups.
+    Used when the web player hits @waiting during subtitle prepare so video Range wins.
+    """
+    global _extract_yield_video
+    prefer = bool(prefer_video)
+    with _extract_pg_lock:
+        _extract_yield_video = prefer
+        pgids = list(_active_extract_pgids)
+    sig = signal.SIGSTOP if prefer else signal.SIGCONT
+    acted = 0
+    for pgid in pgids:
+        try:
+            os.killpg(pgid, sig)
+            acted += 1
+        except ProcessLookupError:
+            with _extract_pg_lock:
+                _active_extract_pgids.discard(pgid)
+        except PermissionError:
+            logger.debug("cannot signal extract pgid=%s", pgid)
+        except Exception:
+            logger.exception("signal extract pgid=%s failed", pgid)
+    return {"prefer": "video" if prefer else "extract", "signaled": acted, "active": len(pgids)}
+
+
+def _run_prio_subprocess(cmd: list, timeout: int) -> subprocess.CompletedProcess:
+    """Run extract with nice/ionice; track pgid so player can SIGSTOP/CONT on waiting."""
+    full = _prio_cmd(cmd)
+    # Honor existing yield before start
+    with _extract_pg_lock:
+        yielding = _extract_yield_video
+    # brief wait if video currently preferred (soft lower)
+    waited = 0.0
+    while yielding and waited < 15.0:
+        time.sleep(0.5)
+        waited += 0.5
+        with _extract_pg_lock:
+            yielding = _extract_yield_video
+
+    proc = subprocess.Popen(
+        full,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        start_new_session=True,
+    )
+    try:
+        pgid = os.getpgid(proc.pid)
+    except Exception:
+        pgid = proc.pid
+    with _extract_pg_lock:
+        _active_extract_pgids.add(pgid)
+        if _extract_yield_video:
+            try:
+                os.killpg(pgid, signal.SIGSTOP)
+            except Exception:
+                pass
+    try:
+        try:
+            stdout, stderr = proc.communicate(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            try:
+                os.killpg(pgid, signal.SIGKILL)
+            except Exception:
+                try:
+                    proc.kill()
+                except Exception:
+                    pass
+            try:
+                proc.communicate(timeout=5)
+            except Exception:
+                pass
+            raise
+        return subprocess.CompletedProcess(full, proc.returncode, stdout or "", stderr or "")
+    finally:
+        with _extract_pg_lock:
+            _active_extract_pgids.discard(pgid)
+            # Ensure not left stopped if somehow still alive
+        try:
+            if proc.poll() is None:
+                os.killpg(pgid, signal.SIGCONT)
+        except Exception:
+            pass
+
+
 def _prio_cmd(cmd: list) -> list:
     """Run extract tools at idle I/O + low CPU so video Range/remux win."""
     out: list = []
@@ -421,9 +513,9 @@ def _mkvextract_srt(video: Path, stream_index: int, out_srt: Path) -> Tuple[bool
         except Exception as e:
             logger.debug("mkvmerge -J failed: %s", e)
     try:
-        proc = subprocess.run(
-            _prio_cmd([mkvextract, "tracks", str(video), f"{tid}:{out_srt}"]),
-            capture_output=True, text=True, timeout=EXTRACT_TIMEOUT_SEC,
+        proc = _run_prio_subprocess(
+            [mkvextract, "tracks", str(video), f"{tid}:{out_srt}"],
+            EXTRACT_TIMEOUT_SEC,
         )
         if proc.returncode != 0:
             err = (proc.stderr or proc.stdout or "").strip()[:300]
@@ -460,9 +552,7 @@ def _ffmpeg_extract_srt_or_vtt(video: Path, stream_index: int, sub_index: Option
                     "-i", str(video), "-map", map_sel,
                     "-c:s", "srt", str(out_path), "-y",
                 ]
-            proc = subprocess.run(
-                _prio_cmd(cmd), capture_output=True, text=True, timeout=EXTRACT_TIMEOUT_SEC,
-            )
+            proc = _run_prio_subprocess(cmd, EXTRACT_TIMEOUT_SEC)
             if proc.returncode == 0 and out_path.is_file() and out_path.stat().st_size > 4:
                 return True, ""
             last_err = (proc.stderr or "").strip()[:300] or f"ffmpeg rc={proc.returncode} map={map_sel}"

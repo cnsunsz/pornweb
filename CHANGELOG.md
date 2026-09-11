@@ -1,5 +1,20 @@
 # Changelog
 
+## [v2.1.15] - 2026-09-11
+
+### 修复
+- **选字幕仍全屏转圈**：背景 `mkvextract`/`ffmpeg` 在 rclone 上抢带宽会触发 video `@waiting`；`subPreparingId` 置位期间**不再**把 `@waiting` 映射为全屏 buffering，仅菜单/提示「准备中」，播放继续
+- 播放器在 `@waiting` 时请求后端暂停抽取进程组（SIGSTOP），`@canplay` / 准备结束时 SIGCONT 恢复，减轻 Range 饿死
+- `selectSubtitle` 明确禁止 `video.load()` / 改 `src`（仅 Blob 挂载 VTT）
+
+### 新增
+- `POST /api/media/subtitles/io-priority?prefer=video|extract`：网页播放器在缓冲时让出抽取 IO
+
+### 说明
+- 依赖 v2.1.14 的 `async=1` + Blob 挂载；本版补齐「准备中仍 `@waiting`」的 UI/IO 缺口
+- Android 可用同一 io-priority 接口；未改选轨逻辑时至少不会被网页 spinner 误导
+
+
 ## [v2.1.14] - 2026-09-09
 
 ### 修复

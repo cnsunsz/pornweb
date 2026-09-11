@@ -112,3 +112,11 @@ export function getContinue() {
 export function scrapeMedia(id, data = {}) {
   return api.post(`/media/${id}/scrape`, data)
 }
+
+/** Prefer video Range over background subtitle extract (SIGSTOP/CONT on extract PIDs). */
+export function setSubtitleIoPriority(preferVideo) {
+  return api.post(`/media/subtitles/io-priority`, null, {
+    params: { prefer: preferVideo ? 'video' : 'extract' },
+  })
+}
+

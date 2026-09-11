@@ -22,6 +22,7 @@ from ..services.subtitles import (
     track_to_vtt,
     track_status as subtitle_track_status,
     prepare_track as subtitle_prepare_track,
+    set_extract_yield_to_video as subtitle_set_extract_yield,
 )
 from ..services.avprobe import probe_file
 from ..services.web_remux import iter_web_remux, ffmpeg_available
@@ -500,6 +501,22 @@ async def get_subtitle_track(
         headers={"Cache-Control": "private, max-age=3600"},
     )
 
+
+
+
+@router.post("/subtitles/io-priority")
+async def subtitle_io_priority(
+    request: Request,
+    prefer: str = Query("extract", description="video=pause extract (SIGSTOP); extract=resume"),
+    token: str = Query(None),
+    db: Session = Depends(get_db),
+):
+    """When web player @waiting during subtitle prepare, pause extract so Range reads catch up."""
+    user = await _auth_user(request, token, db)
+    if not user:
+        raise HTTPException(status_code=401, detail="未授权")
+    prefer_video = str(prefer or "").lower() in ("video", "1", "true", "yes", "play")
+    return await asyncio.to_thread(subtitle_set_extract_yield, prefer_video)
 
 @router.get("/stream/{media_id}")
 async def stream_media(
