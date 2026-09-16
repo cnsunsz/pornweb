@@ -20,3 +20,8 @@ export function getMe() {
 export function activate(inviteCode) {
   return api.post('/auth/activate', { invite_code: String(inviteCode || '').trim() })
 }
+
+/** Self-service account deletion (non-admin). Body: { password } */
+export function deleteAccount(password) {
+  return api.post('/auth/delete-account', { password: String(password || '') })
+}

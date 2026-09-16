@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from sqlalchemy import select, func as sqlfunc
+from sqlalchemy import select, func as sqlfunc, update
 from pydantic import BaseModel
 from datetime import datetime, timedelta, timezone
 from typing import Optional
@@ -8,6 +8,8 @@ from ..core.database import get_db
 from ..core.security import verify_password, get_password_hash, create_access_token
 from ..models.user import User
 from ..models.invite_code import InviteCode
+from ..models.progress import PlaybackProgress
+from ..models.scan_job import ScanJob
 from .deps import get_current_user, user_access_active, access_days_left
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -26,6 +28,9 @@ class LoginRequest(BaseModel):
 class ActivateRequest(BaseModel):
     invite_code: Optional[str] = None
     activation_code: Optional[str] = None
+
+class DeleteAccountRequest(BaseModel):
+    password: str
 
 class UserResponse(BaseModel):
     id: int
@@ -218,3 +223,50 @@ async def activate(
         message="授权已续期" if user.access_expires_at else "已激活永久授权",
         user=_user_response(user),
     )
+
+
+@router.post("/delete-account")
+async def delete_account(
+    req: DeleteAccountRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Self-service account deletion for ordinary (non-admin) users.
+    Hard-deletes the user row after clearing invite_code FKs and related rows.
+    Client must clear token / logout on 200.
+    """
+    if user.is_admin:
+        raise HTTPException(status_code=400, detail="管理员账户不可自行注销")
+    if not (req.password or "").strip():
+        raise HTTPException(status_code=400, detail="请输入当前密码以确认注销")
+    if not verify_password(req.password, user.hashed_password):
+        raise HTTPException(status_code=400, detail="密码错误")
+
+    uid = user.id
+    # Prefer safe FK handling even when SQLite foreign_keys pragma is off
+    db.execute(
+        update(InviteCode).where(InviteCode.used_by == uid).values(used_by=None)
+    )
+    db.execute(
+        update(InviteCode).where(InviteCode.created_by == uid).values(created_by=None)
+    )
+    for row in db.execute(select(PlaybackProgress).where(PlaybackProgress.user_id == uid)).scalars().all():
+        db.delete(row)
+    for row in db.execute(select(ScanJob).where(ScanJob.user_id == uid)).scalars().all():
+        db.delete(row)
+
+    # Re-load user bound to this session for ORM cascade (media_items)
+    u = db.execute(select(User).where(User.id == uid)).scalar_one()
+    db.delete(u)
+    db.commit()
+    return {"ok": True, "message": "账户已注销"}
+
+
+@router.delete("/me")
+async def delete_me(
+    req: DeleteAccountRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Alias of POST /api/auth/delete-account (same body {password})."""
+    return await delete_account(req, db, user)

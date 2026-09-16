@@ -214,6 +214,14 @@ export default {
     cloudScrape: 'Metadata',
     cloudScrapeHint: 'See Metadata settings above',
     language: 'Display language', languageHint: 'Defaults to your browser language',
+    deleteAccount: 'Delete account',
+    deleteAccountHint: 'Permanently delete this account and related data. This cannot be undone. Admins cannot self-delete.',
+    deleteAccountPw: 'Current password',
+    deleteAccountPwPh: 'Enter password to confirm',
+    deleteAccountPwReq: 'Enter your current password',
+    deleteAccountBtn: 'Delete account',
+    deleteAccountConfirm: 'Delete your account permanently? You will not be able to sign in again.',
+    deleteAccountOk: 'Account deleted',
   },
   lib: {
     title: 'Libraries', add: 'Add library', path: 'Path', pathPh: 'Folder path, e.g. D:\\Movies',
@@ -249,6 +257,10 @@ export default {
   api: {
     '账户不存在': 'Account not found', '密码错误': 'Wrong password', '用户名已存在': 'Username taken',
     '邮箱已被注册': 'Email already registered', '未登录': 'Not signed in', '登录已过期，请重新登录': 'Session expired, sign in again',
+    '管理员账户不可自行注销': 'Admins cannot delete their own account',
+    '请输入当前密码以确认注销': 'Enter current password to confirm deletion',
+    '账户已注销': 'Account deleted',
+    '原密码错误': 'Incorrect current password',
     '需要管理员权限': 'Administrator required', '媒体不存在': 'Media not found', '未授权': 'Unauthorized',
   },
   playback: {

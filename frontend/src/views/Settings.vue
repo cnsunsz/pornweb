@@ -349,6 +349,19 @@
             </el-form-item>
           </el-form>
         </el-card>
+
+        <el-card v-if="auth.isLoggedIn && !auth.isAdmin" class="danger-zone" style="margin-top:16px;border-color:#5c1a1a">
+          <template #header><span class="ch" style="color:#f56c6c">{{ t('dash.deleteAccount') }}</span></template>
+          <p class="hint" style="color:#f56c6c;margin-top:0">{{ t('dash.deleteAccountHint') }}</p>
+          <el-form :model="delForm" style="max-width:360px" @submit.prevent>
+            <el-form-item :label="t('dash.deleteAccountPw')">
+              <el-input v-model="delForm.password" type="password" show-password :placeholder="t('dash.deleteAccountPwPh')" autocomplete="current-password" />
+            </el-form-item>
+            <el-form-item>
+              <el-button type="danger" :loading="delBusy" @click="confirmDeleteAccount">{{ t('dash.deleteAccountBtn') }}</el-button>
+            </el-form-item>
+          </el-form>
+        </el-card>
       </div>
     </section>
   </div>
@@ -362,7 +375,8 @@ import { useAuthStore } from '@/stores/auth'
 import { scrapeActorPhotos } from '@/api/actors'
 import { getServerSettings, updateServerSettings } from '@/api/settings'
 import { changePassword } from '@/api/users'
-import { ElMessage } from 'element-plus'
+import { deleteAccount } from '@/api/auth'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { setLocale, SUPPORTED, apiError } from '@/i18n'
 import { usePlayerPrefs } from '@/composables/usePlayerPrefs'
 import Admin from '@/views/Admin.vue'
@@ -463,6 +477,9 @@ const swipeOptions = [60, 90, 120, 180]
 
 const pwRef = ref()
 const pwBusy = ref(false)
+const delForm = reactive({ password: '' })
+const delBusy = ref(false)
+
 const pw = reactive({ old_password: '', new_password: '' })
 const pwRules = computed(() => ({
   old_password: [{ required: true, message: t('dash.oldPwReq') }],
@@ -549,6 +566,34 @@ async function changePw() {
     ElMessage.error(apiError(e, t))
   } finally { pwBusy.value = false }
 }
+
+async function confirmDeleteAccount() {
+  if (!delForm.password) {
+    ElMessage.warning(t('dash.deleteAccountPwReq'))
+    return
+  }
+  try {
+    await ElMessageBox.confirm(
+      t('dash.deleteAccountConfirm'),
+      t('dash.deleteAccount'),
+      { type: 'warning', confirmButtonText: t('dash.deleteAccountBtn'), cancelButtonText: t('users.cancel'), confirmButtonClass: 'el-button--danger' }
+    )
+  } catch {
+    return
+  }
+  delBusy.value = true
+  try {
+    await deleteAccount(delForm.password)
+    ElMessage.success(t('dash.deleteAccountOk'))
+    auth.logout()
+    router.push('/login')
+  } catch (e) {
+    ElMessage.error(apiError(e, t))
+  } finally {
+    delBusy.value = false
+  }
+}
+
 </script>
 
 <style scoped>

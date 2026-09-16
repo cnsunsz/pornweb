@@ -1,5 +1,25 @@
 # Changelog
 
+## [v2.1.21] - 2026-09-16
+
+### 新增
+- **普通用户自助注销账户**：设置 → 我的账户 →「注销账户」危险区，需输入当前密码并二次确认
+- `POST /api/auth/delete-account` body `{ "password": "..." }`（同义 `DELETE /api/auth/me` 相同 body）
+- 仅非管理员可注销；管理员自删返回 400「管理员账户不可自行注销」
+- 硬删除用户行；注销前将 `invite_codes.used_by` / `created_by` 置空，并清理该用户播放进度与扫库任务；媒体条目随用户 ORM cascade 删除
+- 成功返回 200 `{ ok, message }` 后客户端须清除 Token 并登出
+
+### 说明（Android / 客户端）
+- `POST /api/auth/delete-account`（推荐）或 `DELETE /api/auth/me`
+- Header: `Authorization: Bearer <token>`
+- Body: `{ "password": "<当前密码>" }`
+- 200: `{ "ok": true, "message": "账户已注销" }` → 清除本地 token / user，跳转登录
+- 400 `detail`:
+  - `密码错误` — 密码不对
+  - `请输入当前密码以确认注销` — 空密码
+  - `管理员账户不可自行注销` — 管理员禁止自助注销（请由其他管理员在用户管理中处理，或保留账户）
+- 401 — 未登录 / Token 无效
+
 ## [v2.1.20] - 2026-09-16
 
 ### 新增
