@@ -33,6 +33,11 @@ export default {
     notePh: '備註（選填）',
     expiresPh: '有效天數',
     expiresHint: '0 = 永不過期',
+    durationPh: '會員天數',
+    durationHint: '0 = 永久會員；核銷後寫入帳戶使用期限',
+    duration: '會員時長',
+    daysUnit: ' 天',
+    permanent: '永久',
     genBtn: '產生',
     lastBatch: '本次產生（點擊複製）',
     copyAll: '複製全部',
@@ -58,6 +63,16 @@ export default {
     confirm: '確認',
     confirmRevoke: '撤銷授權碼 {code}？',
     revoked: '已撤銷',
+  },
+
+  access: {
+    expiredTitle: '授權已過期',
+    expiredMsg: '授權已過期，請使用新的授權碼續期後即可繼續觀看影片。',
+    codePh: '輸入授權碼續期',
+    codeRequired: '請輸入授權碼',
+    renewBtn: '續期啟用',
+    renewOk: '續期成功',
+    renewFail: '續期失敗',
   },
 
   home: {

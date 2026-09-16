@@ -1,5 +1,22 @@
 # Changelog
 
+## [v2.1.17] - 2026-09-16
+
+### 新增
+- **授权码会员时长**：生成授权码时可设 `duration_days`（核销后账户可用天数）；`null`/省略 = 永久。与未使用码货架期 `expires_days` 分离
+- 用户表 `access_expires_at`（`null` = 永久）；管理员永不过期；已有普通用户迁移后保持 `null`（永久），避免误锁
+- 注册核销：按码的 `duration_days` 写入到期时间
+- 登录后续期：`POST /api/auth/activate` body `{ "invite_code" }`（或 `activation_code`）— 消费未使用码，从 `max(now, 当前到期)` 起顺延；已过期也可续
+- `/api/auth/me`（及 login/register 的 `user`）增加 `access_expires_at`、`access_active`、`access_days_left`
+- 过期非管理员：媒体库/流媒体/演员等接口返回 **HTTP 403**，`detail` 固定为「授权已过期，请使用新的授权码续期」（Android 可映射首页续期横幅）
+- 网页：授权码页增加「会员天数」；过期用户首页/全站提示 + 授权码续期表单
+
+### 说明（Android / 客户端）
+- `GET /api/auth/me` → `access_expires_at` (ISO8601|null)、`access_active` (bool)、`access_days_left` (int|null；null=永久/管理员，0=已过期)
+- 过期时：首页展示续期入口；用户输入授权码调用 `POST /api/auth/activate` `{ "invite_code": "XXXX-XXXX-XXXX" }` → 200 `{ ok, message, user }`
+- 媒体相关 API（list/detail/stream/libraries/actors…）过期 → **403** + 上述固定中文 `detail`；登录与 `/me`、`/activate` 仍可用
+- 管理端生成：`POST /api/admin/invite-codes` 增加可选 `duration_days`；列表项回显该字段
+
 ## [v2.1.16] - 2026-09-16
 
 ### 新增

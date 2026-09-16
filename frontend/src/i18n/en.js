@@ -28,11 +28,16 @@ export default {
   },
   invite: {
     title: 'Invite codes',
-    hint: 'Generate registration invite codes. New users must provide an unused valid code.',
+    hint: 'Generate invite/renew codes. Set membership duration (on redeem) and unused-code shelf life.',
     generate: 'Batch generate',
     notePh: 'Note (optional)',
     expiresPh: 'Expires in days',
     expiresHint: '0 = never expires',
+    durationPh: 'Membership days',
+    durationHint: '0 = permanent; applied when redeemed',
+    duration: 'Membership',
+    daysUnit: ' days',
+    permanent: 'Permanent',
     genBtn: 'Generate',
     lastBatch: 'This batch (click to copy)',
     copyAll: 'Copy all',
@@ -58,6 +63,16 @@ export default {
     confirm: 'Confirm',
     confirmRevoke: 'Revoke code {code}?',
     revoked: 'Revoked',
+  },
+
+  access: {
+    expiredTitle: 'Access expired',
+    expiredMsg: 'Your access has expired. Enter a new activation code to renew and watch videos again.',
+    codePh: 'Activation code',
+    codeRequired: 'Enter an activation code',
+    renewBtn: 'Renew',
+    renewOk: 'Renewed',
+    renewFail: 'Renew failed',
   },
 
   home: {

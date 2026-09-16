@@ -9,7 +9,7 @@ from ..core.database import get_db
 from ..models.library import MediaLibrary
 from ..models.media import MediaItem
 from ..models.user import User
-from .deps import get_current_user, get_current_admin
+from .deps import get_current_user, get_current_admin, require_media_access
 from ..services.scanner import delete_media_by_folder
 from ..services.scan_runner import (
     start_scan, get_latest_job, job_to_dict, running_jobs_by_library,
@@ -60,7 +60,7 @@ def _to_out(
 @router.get("/", response_model=List[LibraryOut])
 async def list_libraries(
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user)
+    user: User = Depends(require_media_access)
 ):
     result = db.execute(select(MediaLibrary).order_by(MediaLibrary.id))
     libs = result.scalars().all()
@@ -153,7 +153,7 @@ async def scan_library(
 async def scan_status(
     lib_id: int,
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user)
+    user: User = Depends(require_media_access)
 ):
     result = db.execute(select(MediaLibrary).where(MediaLibrary.id == lib_id))
     lib = result.scalar_one_or_none()

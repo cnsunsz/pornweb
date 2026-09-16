@@ -27,7 +27,7 @@ from ..core.database import get_db
 from ..models.media import MediaItem
 from ..models.user import User
 from ..models.progress import PlaybackProgress
-from .deps import get_current_user, get_current_admin
+from .deps import get_current_user, get_current_admin, require_media_access, assert_media_access
 from .media import MediaListResponse, _to_response, _auth_user
 
 router = APIRouter(prefix="/api/actors", tags=["actors"])
@@ -124,7 +124,7 @@ def _decode_name(name: str) -> str:
 async def list_actors(
     search: Optional[str] = Query(None),
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_media_access),
 ):
     """列出库中所有可见媒体的演员（登录用户共享库，同 /api/media/list）。"""
     rows = db.execute(
@@ -175,6 +175,7 @@ async def actor_photo(
     user = await _auth_user(request, token, db)
     if not user:
         raise HTTPException(status_code=401, detail="未授权")
+    assert_media_access(user)
     n = _decode_name(name)
     if not n:
         raise HTTPException(status_code=404, detail="无演员头像")
@@ -239,7 +240,7 @@ async def actor_media_by_query(
     page_size: int = Query(40, ge=1, le=100),
     sort: str = Query("newest"),
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_media_access),
 ):
     """查询参数取演员作品（CJK 友好备选，无需路径编码）。"""
     return await _actor_media(_decode_name(name), page, page_size, sort, db, user)
@@ -252,7 +253,7 @@ async def actor_media_preferred(
     page_size: int = Query(40, ge=1, le=100),
     sort: str = Query("newest"),
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_media_access),
 ):
     """推荐：演员作品列表（Android / Web）。name 须 URL 编码。"""
     return await _actor_media(_decode_name(name), page, page_size, sort, db, user)
@@ -265,7 +266,7 @@ async def actor_media_alias(
     page_size: int = Query(40, ge=1, le=100),
     sort: str = Query("newest"),
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_media_access),
 ):
     """兼容别名，等同 GET /api/actors/{name}/media。"""
     return await _actor_media(_decode_name(name), page, page_size, sort, db, user)

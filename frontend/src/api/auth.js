@@ -15,3 +15,8 @@ export function login(username, password) {
 export function getMe() {
   return api.get('/auth/me')
 }
+
+/** Logged-in renew / redeem activation code */
+export function activate(inviteCode) {
+  return api.post('/auth/activate', { invite_code: String(inviteCode || '').trim() })
+}

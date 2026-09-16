@@ -9,6 +9,7 @@
           'app-main-auth': !authStore.isLoggedIn,
         }"
       >
+        <AccessRenewBanner />
         <router-view />
       </main>
     </div>
@@ -20,6 +21,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import AppHeader from '@/components/AppHeader.vue'
+import AccessRenewBanner from '@/components/AccessRenewBanner.vue'
 import zhCn from 'element-plus/es/locale/lang/zh-cn'
 import zhTw from 'element-plus/es/locale/lang/zh-tw'
 import en from 'element-plus/es/locale/lang/en'

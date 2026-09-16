@@ -1,4 +1,4 @@
-"""Admin invite / activation codes for registration."""
+"""Admin invite / activation codes for registration and renew."""
 from __future__ import annotations
 
 import secrets
@@ -31,7 +31,9 @@ def _gen_code() -> str:
 class GenerateRequest(BaseModel):
     count: int = Field(1, ge=1, le=100)
     note: Optional[str] = Field(None, max_length=200)
-    expires_days: Optional[int] = Field(None, ge=1, le=3650)
+    expires_days: Optional[int] = Field(None, ge=1, le=3650)  # unused-code shelf life
+    # membership days when redeemed; null/omit = permanent; prefer positive int
+    duration_days: Optional[int] = Field(None, ge=1, le=36500)
 
 
 class InviteCodeResponse(BaseModel):
@@ -45,6 +47,7 @@ class InviteCodeResponse(BaseModel):
     batch_id: str = ""
     expires_at: Optional[str] = None
     revoked: bool = False
+    duration_days: Optional[int] = None
     status: str  # unused | used | revoked | expired
 
     class Config:
@@ -93,6 +96,7 @@ def _to_resp(row: InviteCode, now: Optional[datetime] = None) -> InviteCodeRespo
         batch_id=row.batch_id or "",
         expires_at=_iso(row.expires_at),
         revoked=bool(row.revoked),
+        duration_days=row.duration_days,
         status=_status(row, now),
     )
 
@@ -107,10 +111,10 @@ async def generate_invite_codes(
     expires_at = None
     if req.expires_days:
         expires_at = now + timedelta(days=req.expires_days)
+    duration_days = req.duration_days  # None = permanent membership
     batch_id = str(uuid.uuid4())
     note = (req.note or "").strip()
     created: List[InviteCode] = []
-    # Avoid rare collisions
     for _ in range(req.count):
         code = None
         for _attempt in range(8):
@@ -131,6 +135,7 @@ async def generate_invite_codes(
             batch_id=batch_id,
             expires_at=expires_at,
             revoked=False,
+            duration_days=duration_days,
         )
         db.add(row)
         created.append(row)

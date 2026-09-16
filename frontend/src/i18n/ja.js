@@ -33,6 +33,11 @@ export default {
     notePh: 'メモ（任意）',
     expiresPh: '有効日数',
     expiresHint: '0 = 無期限',
+    durationPh: '会員日数',
+    durationHint: '0 = 無期限；使用時に反映',
+    duration: '会員期間',
+    daysUnit: ' 日',
+    permanent: '無期限',
     genBtn: '生成',
     lastBatch: '今回の生成（クリックでコピー）',
     copyAll: 'すべてコピー',
@@ -58,6 +63,16 @@ export default {
     confirm: '確認',
     confirmRevoke: 'コード {code} を取り消しますか？',
     revoked: '取り消しました',
+  },
+
+  access: {
+    expiredTitle: 'アクセス期限切れ',
+    expiredMsg: 'アクセス期限が切れました。新しい認証コードで更新してください。',
+    codePh: '認証コード',
+    codeRequired: '認証コードを入力',
+    renewBtn: '更新',
+    renewOk: '更新しました',
+    renewFail: '更新に失敗',
   },
 
   home: {

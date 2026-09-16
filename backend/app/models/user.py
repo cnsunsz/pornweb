@@ -13,5 +13,7 @@ class User(Base):
     is_admin = Column(Boolean, default=False)
     avatar = Column(String(500), default="")
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    # null = permanent membership; set on register/activate from invite duration_days
+    access_expires_at = Column(DateTime, nullable=True)
     
     media_items = relationship("MediaItem", back_populates="owner", cascade="all, delete-orphan")

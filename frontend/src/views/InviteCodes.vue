@@ -18,6 +18,14 @@
           :placeholder="t('invite.expiresPh')"
         />
         <span class="note">{{ t('invite.expiresHint') }}</span>
+        <el-input-number
+          v-model="durationDays"
+          :min="0"
+          :max="36500"
+          controls-position="right"
+          :placeholder="t('invite.durationPh')"
+        />
+        <span class="note">{{ t('invite.durationHint') }}</span>
         <el-button type="primary" :loading="genBusy" @click="doGenerate">{{ t('invite.genBtn') }}</el-button>
       </div>
       <div v-if="lastGenerated.length" class="last-gen">
@@ -77,6 +85,11 @@
             <span class="muted">{{ row.expires_at ? fmt(row.expires_at) : '-' }}</span>
           </template>
         </el-table-column>
+        <el-table-column :label="t('invite.duration')" width="120">
+          <template #default="{ row }">
+            <span class="muted">{{ row.duration_days != null ? (row.duration_days + t('invite.daysUnit')) : t('invite.permanent') }}</span>
+          </template>
+        </el-table-column>
         <el-table-column :label="t('invite.actions')" width="140" fixed="right">
           <template #default="{ row }">
             <el-button size="small" text @click="copyOne(row.code)">{{ t('invite.copy') }}</el-button>
@@ -115,6 +128,7 @@ const { t, locale } = useI18n()
 const count = ref(1)
 const note = ref('')
 const expiresDays = ref(0)
+const durationDays = ref(30)
 const genBusy = ref(false)
 const lastGenerated = ref([])
 const items = ref([])
@@ -163,6 +177,7 @@ async function doGenerate() {
   try {
     const body = { count: count.value, note: note.value || undefined }
     if (expiresDays.value > 0) body.expires_days = expiresDays.value
+    if (durationDays.value > 0) body.duration_days = durationDays.value
     const res = await generateInviteCodes(body)
     lastGenerated.value = res.data || []
     ElMessage.success(t('invite.genOk', { n: lastGenerated.value.length }))

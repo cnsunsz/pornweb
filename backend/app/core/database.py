@@ -50,6 +50,29 @@ def _migrate_media_columns(sync_conn):
             if "duplicate column" not in str(exc).lower():
                 raise
 
+def _migrate_access_columns(sync_conn):
+    """Add membership / invite duration columns. Existing users keep NULL = permanent."""
+    try:
+        user_cols = {r[1] for r in sync_conn.execute(text("PRAGMA table_info(users)")).fetchall()}
+    except Exception:
+        user_cols = set()
+    if user_cols and "access_expires_at" not in user_cols:
+        try:
+            sync_conn.execute(text("ALTER TABLE users ADD COLUMN access_expires_at DATETIME"))
+        except Exception as exc:
+            if "duplicate column" not in str(exc).lower():
+                raise
+    try:
+        inv_cols = {r[1] for r in sync_conn.execute(text("PRAGMA table_info(invite_codes)")).fetchall()}
+    except Exception:
+        inv_cols = set()
+    if inv_cols and "duration_days" not in inv_cols:
+        try:
+            sync_conn.execute(text("ALTER TABLE invite_codes ADD COLUMN duration_days INTEGER"))
+        except Exception as exc:
+            if "duplicate column" not in str(exc).lower():
+                raise
+
 def init_db():
     from ..models import User, MediaItem, MediaLibrary, PlaybackProgress, ScanJob, ActorPhoto, InviteCode  # noqa: F401
     try:
@@ -59,3 +82,4 @@ def init_db():
             raise
     with engine.begin() as conn:
         _migrate_media_columns(conn)
+        _migrate_access_columns(conn)

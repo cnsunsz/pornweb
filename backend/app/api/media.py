@@ -13,7 +13,7 @@ from ..core.config import settings
 from ..models.media import MediaItem
 from ..models.user import User
 from ..models.progress import PlaybackProgress
-from .deps import get_current_user, get_current_admin
+from .deps import get_current_user, get_current_admin, require_media_access, assert_media_access
 from ..services.scanner import scan_directory
 from ..services.subtitles import (
     resolve_video_path,
@@ -142,7 +142,7 @@ async def list_media(
     folder: Optional[str] = None,
     sort: str = Query("newest"),
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user)
+    user: User = Depends(require_media_access)
 ):
     # 媒体库对所有登录用户共享（Jellyfin/Emby 逻辑）
     query = select(MediaItem)
@@ -206,7 +206,7 @@ async def list_media(
 async def get_detail(
     media_id: int,
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user)
+    user: User = Depends(require_media_access)
 ):
     result = db.execute(
         select(MediaItem).where(MediaItem.id == media_id)
@@ -295,6 +295,7 @@ async def get_poster(
     user = await _auth_user(request, token, db)
     if not user:
         raise HTTPException(status_code=401, detail="未授权")
+    assert_media_access(user)
     result = db.execute(
         select(MediaItem).where(MediaItem.id == media_id)
     )
@@ -337,6 +338,7 @@ async def get_fanart(
     user = await _auth_user(request, token, db)
     if not user:
         raise HTTPException(status_code=401, detail="未授权")
+    assert_media_access(user)
     result = db.execute(
         select(MediaItem).where(MediaItem.id == media_id)
     )
@@ -403,6 +405,7 @@ async def list_subtitles(
     user = await _auth_user(request, token, db)
     if not user:
         raise HTTPException(status_code=401, detail="未授权")
+    assert_media_access(user)
     result = db.execute(select(MediaItem).where(MediaItem.id == media_id))
     item = result.scalar_one_or_none()
     if not item:
@@ -432,6 +435,7 @@ async def get_subtitle_status(
     user = await _auth_user(request, token, db)
     if not user:
         raise HTTPException(status_code=401, detail="未授权")
+    assert_media_access(user)
     result = db.execute(select(MediaItem).where(MediaItem.id == media_id))
     item = result.scalar_one_or_none()
     if not item:
@@ -457,6 +461,7 @@ async def get_subtitle_track(
     user = await _auth_user(request, token, db)
     if not user:
         raise HTTPException(status_code=401, detail="未授权")
+    assert_media_access(user)
     result = db.execute(select(MediaItem).where(MediaItem.id == media_id))
     item = result.scalar_one_or_none()
     if not item:
@@ -515,6 +520,7 @@ async def subtitle_io_priority(
     user = await _auth_user(request, token, db)
     if not user:
         raise HTTPException(status_code=401, detail="未授权")
+    assert_media_access(user)
     prefer_video = str(prefer or "").lower() in ("video", "1", "true", "yes", "play")
     return await asyncio.to_thread(subtitle_set_extract_yield, prefer_video)
 
@@ -529,6 +535,7 @@ async def stream_media(
     user = await _auth_user(request, token, db)
     if not user:
         raise HTTPException(status_code=401, detail="未授权")
+    assert_media_access(user)
     
     result = db.execute(
         select(MediaItem).where(MediaItem.id == media_id)
@@ -635,6 +642,7 @@ async def stream_media_web(
     user = await _auth_user(request, token, db)
     if not user:
         raise HTTPException(status_code=401, detail="未授权")
+    assert_media_access(user)
     if not ffmpeg_available():
         raise HTTPException(status_code=503, detail="服务器未安装 ffmpeg，无法网页转封装音轨")
 
@@ -744,7 +752,7 @@ async def save_progress(
     media_id: int,
     req: ProgressIn,
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user)
+    user: User = Depends(require_media_access)
 ):
     item = (db.execute(select(MediaItem).where(MediaItem.id == media_id))).scalar_one_or_none()
     if not item:
@@ -771,7 +779,7 @@ async def save_progress(
 @router.get("/continue", response_model=MediaListResponse)
 async def continue_watching(
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user)
+    user: User = Depends(require_media_access)
 ):
     rows = (db.execute(
         select(PlaybackProgress).where(
@@ -891,7 +899,7 @@ async def delete_media(
 @router.get("/genres")
 async def list_genres(
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user)
+    user: User = Depends(require_media_access)
 ):
     result = db.execute(
         select(MediaItem.genre).where(MediaItem.genre != "")

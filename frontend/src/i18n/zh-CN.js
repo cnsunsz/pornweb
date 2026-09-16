@@ -28,11 +28,16 @@ export default {
   },
   invite: {
     title: '授权码',
-    hint: '生成注册授权码；用户注册时必须填写未使用的有效授权码。',
+    hint: '生成注册/续期授权码；可设置会员时长（核销后生效）与授权码自身有效期。',
     generate: '批量生成',
     notePh: '备注（可选）',
     expiresPh: '有效天数',
     expiresHint: '0 = 永不过期',
+    durationPh: '会员天数',
+    durationHint: '0 = 永久会员；核销后写入账户使用期限',
+    duration: '会员时长',
+    daysUnit: ' 天',
+    permanent: '永久',
     genBtn: '生成',
     lastBatch: '本次生成（点击复制）',
     copyAll: '复制全部',
@@ -58,6 +63,16 @@ export default {
     confirm: '确认',
     confirmRevoke: '撤销授权码 {code}？',
     revoked: '已撤销',
+  },
+
+  access: {
+    expiredTitle: '授权已过期',
+    expiredMsg: '授权已过期，请使用新的授权码续期后即可继续观看视频。',
+    codePh: '输入授权码续期',
+    codeRequired: '请输入授权码',
+    renewBtn: '续期激活',
+    renewOk: '续期成功',
+    renewFail: '续期失败',
   },
 
   home: {

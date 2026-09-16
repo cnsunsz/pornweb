@@ -14,5 +14,7 @@ class InviteCode(Base):
     used_at = Column(DateTime, nullable=True)
     note = Column(String(200), default="")
     batch_id = Column(String(36), default="", index=True)
-    expires_at = Column(DateTime, nullable=True)
+    expires_at = Column(DateTime, nullable=True)  # unused-code shelf life
     revoked = Column(Boolean, default=False, nullable=False)
+    # membership length granted on redeem; null = permanent access
+    duration_days = Column(Integer, nullable=True)
