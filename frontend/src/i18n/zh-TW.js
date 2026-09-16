@@ -80,6 +80,17 @@ export default {
     renewBtn: '續期啟用',
     renewOk: '續期成功',
     renewFail: '續期失敗',
+    memberStatus: '會員狀態',
+    expiresAt: '到期時間',
+    daysLeft: '剩餘天數',
+    statusActive: '有效',
+    statusExpired: '已過期',
+    statusPermanent: '永久',
+    statusAdmin: '管理員不受限',
+    permanent: '永久',
+    expired: '已到期',
+    adminUnlimited: '管理員不受限',
+    daysLeftN: '{n} 天',
   },
 
   home: {

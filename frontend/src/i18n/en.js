@@ -80,6 +80,17 @@ export default {
     renewBtn: 'Renew',
     renewOk: 'Renewed',
     renewFail: 'Renew failed',
+    memberStatus: 'Membership',
+    expiresAt: 'Expires',
+    daysLeft: 'Days left',
+    statusActive: 'Active',
+    statusExpired: 'Expired',
+    statusPermanent: 'Permanent',
+    statusAdmin: 'Admin (unlimited)',
+    permanent: 'Permanent',
+    expired: 'Expired',
+    adminUnlimited: 'Admin (unlimited)',
+    daysLeftN: '{n} days',
   },
 
   home: {

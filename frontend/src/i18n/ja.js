@@ -80,6 +80,17 @@ export default {
     renewBtn: '更新',
     renewOk: '更新しました',
     renewFail: '更新に失敗',
+    memberStatus: '会員状態',
+    expiresAt: '有効期限',
+    daysLeft: '残り日数',
+    statusActive: '有効',
+    statusExpired: '期限切れ',
+    statusPermanent: '無期限',
+    statusAdmin: '管理者（制限なし）',
+    permanent: '無期限',
+    expired: '期限切れ',
+    adminUnlimited: '管理者（制限なし）',
+    daysLeftN: '{n} 日',
   },
 
   home: {

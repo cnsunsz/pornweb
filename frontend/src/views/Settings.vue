@@ -304,7 +304,30 @@
             <el-descriptions-item :label="t('auth.username')">{{ auth.user?.username }}</el-descriptions-item>
             <el-descriptions-item :label="t('auth.email')">{{ auth.user?.email }}</el-descriptions-item>
             <el-descriptions-item :label="t('dash.role')"><el-tag :type="auth.isAdmin?'danger':'info'" size="small">{{ auth.isAdmin ? t('dash.admin') : t('dash.user') }}</el-tag></el-descriptions-item>
+            <el-descriptions-item :label="t('access.memberStatus')">
+              <el-tag :type="memberStatusTag" size="small">{{ memberStatusLabel }}</el-tag>
+            </el-descriptions-item>
+            <el-descriptions-item :label="t('access.expiresAt')">{{ memberExpiresLabel }}</el-descriptions-item>
+            <el-descriptions-item :label="t('access.daysLeft')">{{ memberDaysLabel }}</el-descriptions-item>
           </el-descriptions>
+          <div v-if="showAccountRenew" class="account-renew" style="margin-top:14px">
+            <el-alert type="warning" :closable="false" show-icon>
+              <template #title>{{ t('access.expiredTitle') }}</template>
+              <div style="margin-top:8px">
+                <p style="margin:0 0 10px;font-size:13px;color:var(--text-dim,#666)">{{ t('access.expiredMsg') }}</p>
+                <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+                  <el-input
+                    v-model="renewCode"
+                    :placeholder="t('access.codePh')"
+                    clearable
+                    style="max-width:280px;flex:1;min-width:180px"
+                    @keyup.enter="submitRenew"
+                  />
+                  <el-button type="primary" :loading="renewBusy" @click="submitRenew">{{ t('access.renewBtn') }}</el-button>
+                </div>
+              </div>
+            </el-alert>
+          </div>
         </el-card>
         <el-card style="margin-top:16px">
           <template #header><span class="ch">{{ t('dash.language') }}</span></template>
@@ -350,6 +373,55 @@ const route = useRoute()
 const router = useRouter()
 const prefs = usePlayerPrefs()
 const tab = ref('account')
+const renewCode = ref('')
+const renewBusy = ref(false)
+
+const memberStatusLabel = computed(() => {
+  if (auth.isAdmin) return t('access.statusAdmin')
+  if (!auth.accessActive || auth.accessDaysLeft === 0) return t('access.statusExpired')
+  if (auth.accessDaysLeft === null) return t('access.statusPermanent')
+  return t('access.statusActive')
+})
+const memberStatusTag = computed(() => {
+  if (auth.isAdmin) return 'success'
+  if (!auth.accessActive || auth.accessDaysLeft === 0) return 'danger'
+  return 'success'
+})
+const memberExpiresLabel = computed(() => {
+  if (auth.isAdmin || !auth.accessExpiresAt) return t('access.permanent')
+  try {
+    return new Date(auth.accessExpiresAt).toLocaleString()
+  } catch {
+    return String(auth.accessExpiresAt)
+  }
+})
+const memberDaysLabel = computed(() => {
+  if (auth.isAdmin) return t('access.adminUnlimited')
+  if (auth.accessDaysLeft === null) return t('access.permanent')
+  if (auth.accessDaysLeft === 0 || !auth.accessActive) return t('access.expired')
+  return t('access.daysLeftN', { n: auth.accessDaysLeft })
+})
+const showAccountRenew = computed(() => auth.isLoggedIn && !auth.isAdmin && !auth.accessActive)
+
+async function submitRenew() {
+  const c = (renewCode.value || '').trim()
+  if (!c) {
+    ElMessage.warning(t('access.codeRequired'))
+    return
+  }
+  renewBusy.value = true
+  try {
+    const data = await auth.activate(c)
+    ElMessage.success(data?.message || t('access.renewOk'))
+    renewCode.value = ''
+    await auth.fetchMe()
+  } catch (e) {
+    ElMessage.error(e.response?.data?.detail || t('access.renewFail'))
+  } finally {
+    renewBusy.value = false
+  }
+}
+
 const actorPhotoScraping = ref(false)
 const saving = ref(false)
 const restartHint = ref(false)
@@ -406,7 +478,16 @@ watch(tab, (v) => {
   if (route.query.tab !== v) router.replace({ path: '/settings', query: { tab: v } })
 })
 
+watch(tab, async (v) => {
+  if (v === 'account' && auth.isLoggedIn) {
+    try { await auth.fetchMe() } catch (e) { console.error(e) }
+  }
+})
+
 onMounted(async () => {
+  if (auth.isLoggedIn) {
+    try { await auth.fetchMe() } catch (e) { console.error(e) }
+  }
   if (auth.isAdmin) {
     try {
       const res = await getServerSettings()

@@ -80,6 +80,17 @@ export default {
     renewBtn: '续期激活',
     renewOk: '续期成功',
     renewFail: '续期失败',
+    memberStatus: '会员状态',
+    expiresAt: '到期时间',
+    daysLeft: '剩余天数',
+    statusActive: '有效',
+    statusExpired: '已过期',
+    statusPermanent: '永久',
+    statusAdmin: '管理员不受限',
+    permanent: '永久',
+    expired: '已到期',
+    adminUnlimited: '管理员不受限',
+    daysLeftN: '{n} 天',
   },
 
   home: {
