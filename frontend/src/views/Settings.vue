@@ -311,10 +311,10 @@
             <el-descriptions-item :label="t('access.daysLeft')">{{ memberDaysLabel }}</el-descriptions-item>
           </el-descriptions>
           <div v-if="showAccountRenew" class="account-renew" style="margin-top:14px">
-            <el-alert type="warning" :closable="false" show-icon>
-              <template #title>{{ t('access.expiredTitle') }}</template>
+            <el-alert :type="accountRenewAlertType" :closable="false" show-icon>
+              <template #title>{{ accountRenewTitle }}</template>
               <div style="margin-top:8px">
-                <p style="margin:0 0 10px;font-size:13px;color:var(--text-dim,#666)">{{ t('access.expiredMsg') }}</p>
+                <p style="margin:0 0 10px;font-size:13px;color:var(--text-dim,#666)">{{ accountRenewMsg }}</p>
                 <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
                   <el-input
                     v-model="renewCode"
@@ -327,6 +327,9 @@
                 </div>
               </div>
             </el-alert>
+          </div>
+          <div v-else-if="auth.isLoggedIn && auth.isAdmin" class="account-renew" style="margin-top:14px">
+            <el-alert type="info" :closable="false" show-icon :title="t('access.adminNoRenew')" />
           </div>
         </el-card>
         <el-card style="margin-top:16px">
@@ -401,7 +404,10 @@ const memberDaysLabel = computed(() => {
   if (auth.accessDaysLeft === 0 || !auth.accessActive) return t('access.expired')
   return t('access.daysLeftN', { n: auth.accessDaysLeft })
 })
-const showAccountRenew = computed(() => auth.isLoggedIn && !auth.isAdmin && !auth.accessActive)
+const showAccountRenew = computed(() => auth.isLoggedIn && !auth.isAdmin)
+const accountRenewAlertType = computed(() => (!auth.accessActive || auth.accessDaysLeft === 0) ? 'warning' : 'info')
+const accountRenewTitle = computed(() => (!auth.accessActive || auth.accessDaysLeft === 0) ? t('access.expiredTitle') : t('access.renewTitle'))
+const accountRenewMsg = computed(() => (!auth.accessActive || auth.accessDaysLeft === 0) ? t('access.expiredMsg') : t('access.renewMsg'))
 
 async function submitRenew() {
   const c = (renewCode.value || '').trim()
