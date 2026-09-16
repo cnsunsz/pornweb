@@ -1,7 +1,11 @@
 import api from './index'
 
-export function register(username, email, password) {
-  return api.post('/auth/register', { username, email, password })
+export function register(username, email, password, inviteCode) {
+  const body = { username, email, password }
+  if (inviteCode) {
+    body.invite_code = String(inviteCode).trim()
+  }
+  return api.post('/auth/register', body)
 }
 
 export function login(username, password) {

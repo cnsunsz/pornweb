@@ -4,6 +4,7 @@
       <div class="side-title">{{ t('dash.title') }}</div>
       <button class="side-item" :class="{on: tab==='server'}" v-if="auth.isAdmin" @click="tab='server'">{{ t('dash.server') }}</button>
       <button class="side-item" :class="{on: tab==='users'}" v-if="auth.isAdmin" @click="tab='users'">{{ t('dash.users') }}</button>
+      <button class="side-item" :class="{on: tab==='invite'}" v-if="auth.isAdmin" @click="tab='invite'">{{ t('dash.invite') }}</button>
       <button class="side-item" :class="{on: tab==='libraries'}" v-if="auth.isAdmin" @click="tab='libraries'">{{ t('dash.libraries') }}</button>
       <div class="side-title">{{ t('dash.account') }}</div>
       <button class="side-item" :class="{on: tab==='playback'}" @click="tab='playback'">{{ t('playback.title') }}</button>
@@ -198,6 +199,10 @@
         <UserManagement />
       </div>
 
+      <div v-if="tab==='invite' && auth.isAdmin">
+        <InviteCodes />
+      </div>
+
       <div v-if="tab==='libraries' && auth.isAdmin">
         <Admin />
       </div>
@@ -336,6 +341,7 @@ import { setLocale, SUPPORTED, apiError } from '@/i18n'
 import { usePlayerPrefs } from '@/composables/usePlayerPrefs'
 import Admin from '@/views/Admin.vue'
 import UserManagement from '@/views/UserManagement.vue'
+import InviteCodes from '@/views/InviteCodes.vue'
 
 const { t, locale } = useI18n()
 const langs = SUPPORTED
@@ -390,7 +396,7 @@ function onLang(code) { setLocale(code) }
 function applyTab(q) {
   const key = Array.isArray(q) ? q[0] : q
   const allowed = auth.isAdmin
-    ? ['server', 'users', 'libraries', 'playback', 'account']
+    ? ['server', 'users', 'invite', 'libraries', 'playback', 'account']
     : ['playback', 'account']
   tab.value = allowed.includes(key) ? key : (auth.isAdmin ? 'server' : 'account')
 }

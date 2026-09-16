@@ -17,7 +17,16 @@
           <el-input v-model="f.password" type="password" show-password :placeholder="t('auth.password')" size="large" />
         </el-form-item>
         <el-form-item prop="confirm">
-          <el-input v-model="f.confirm" type="password" show-password :placeholder="t('auth.confirm')" size="large" @keyup.enter="submit" />
+          <el-input v-model="f.confirm" type="password" show-password :placeholder="t('auth.confirm')" size="large" />
+        </el-form-item>
+        <el-form-item prop="invite_code">
+          <el-input
+            v-model="f.invite_code"
+            :placeholder="t('auth.inviteCode')"
+            size="large"
+            clearable
+            @keyup.enter="submit"
+          />
         </el-form-item>
         <el-button type="primary" size="large" :loading="busy" @click="submit" style="width:100%">{{ t('auth.register') }}</el-button>
       </el-form>
@@ -36,17 +45,22 @@ import BrandLogo from '@/components/BrandLogo.vue'
 const { t } = useI18n()
 const router = useRouter(); const auth = useAuthStore()
 const formRef = ref(); const busy = ref(false)
-const f = reactive({ username:'', email:'', password:'', confirm:'' })
+const f = reactive({ username:'', email:'', password:'', confirm:'', invite_code:'' })
 const rules = computed(() => ({
   username: [{ required: true, message: t('auth.userRequired') }, { min: 2, max: 20, message: t('auth.userLen') }],
   email: [{ required: true, message: t('auth.emailRequired') }, { type: 'email', message: t('auth.emailInvalid') }],
   password: [{ required: true, message: t('auth.passRequired') }, { min: 6, message: t('auth.passMin') }],
   confirm: [{ required: true, message: t('auth.confirmRequired') }, { validator: (r, v, cb) => v !== f.password ? cb(new Error(t('auth.passMismatch'))) : cb() }],
+  invite_code: [{ required: true, message: t('auth.inviteRequired') }],
 }))
 async function submit() {
   try { await formRef.value.validate() } catch { return }
   busy.value = true
-  try { await auth.register(f.username, f.email, f.password); ElMessage.success(t('auth.registerOk')); router.push('/') }
+  try {
+    await auth.register(f.username, f.email, f.password, f.invite_code)
+    ElMessage.success(t('auth.registerOk'))
+    router.push('/')
+  }
   catch(e) { ElMessage.error(apiError(e, t) === t('err.fail') ? (e.response?.data?.detail || t('auth.registerFail')) : apiError(e, t)) }
   finally { busy.value = false }
 }

@@ -1,10 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from sqlalchemy import select
-from pydantic import BaseModel, EmailStr
+from sqlalchemy import select, func as sqlfunc
+from pydantic import BaseModel
+from datetime import datetime, timezone
+from typing import Optional
 from ..core.database import get_db
 from ..core.security import verify_password, get_password_hash, create_access_token
 from ..models.user import User
+from ..models.invite_code import InviteCode
 from .deps import get_current_user
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -13,6 +16,9 @@ class RegisterRequest(BaseModel):
     username: str
     email: str
     password: str
+    invite_code: Optional[str] = None  # required unless first user (bootstrap)
+    # alias accepted via model_validator / extra field name activation_code
+    activation_code: Optional[str] = None
 
 class LoginRequest(BaseModel):
     username: str
@@ -33,6 +39,20 @@ class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     user: UserResponse
+
+def _normalize_code(req: RegisterRequest) -> str:
+    raw = (req.invite_code or req.activation_code or "").strip().upper()
+    # Keep hyphens if present; strip spaces
+    raw = raw.replace(" ", "")
+    return raw
+
+def _code_lookup_variants(code: str):
+    """Match stored XXXX-XXXX-XXXX even if client omits hyphens."""
+    compact = code.replace("-", "")
+    variants = {code, compact}
+    if len(compact) == 12 and "-" not in code:
+        variants.add(f"{compact[0:4]}-{compact[4:8]}-{compact[8:12]}")
+    return list(variants)
 
 @router.post("/register", response_model=TokenResponse)
 async def register(req: RegisterRequest, db: Session = Depends(get_db)):
@@ -55,9 +75,33 @@ async def register(req: RegisterRequest, db: Session = Depends(get_db)):
     if result.scalar_one_or_none():
         raise HTTPException(status_code=400, detail="邮箱已被注册")
     
-    from sqlalchemy import func as sqlfunc
     count_result = db.execute(select(sqlfunc.count(User.id)))
     is_first = (count_result.scalar() or 0) == 0
+
+    invite_row = None
+    now = datetime.now(timezone.utc)
+    if not is_first:
+        code_str = _normalize_code(req)
+        if not code_str:
+            raise HTTPException(status_code=400, detail="请输入授权码")
+        # Atomic claim: lock unused row
+        invite_row = db.execute(
+            select(InviteCode)
+            .where(InviteCode.code.in_(_code_lookup_variants(code_str)))
+            .with_for_update()
+        ).scalar_one_or_none()
+        if not invite_row:
+            raise HTTPException(status_code=400, detail="授权码无效")
+        if invite_row.revoked:
+            raise HTTPException(status_code=400, detail="授权码已撤销")
+        if invite_row.used_by is not None:
+            raise HTTPException(status_code=400, detail="授权码已被使用")
+        if invite_row.expires_at is not None:
+            exp = invite_row.expires_at
+            if exp.tzinfo is None:
+                exp = exp.replace(tzinfo=timezone.utc)
+            if exp < now:
+                raise HTTPException(status_code=400, detail="授权码已过期")
     
     user = User(
         username=username,
@@ -66,6 +110,12 @@ async def register(req: RegisterRequest, db: Session = Depends(get_db)):
         is_admin=is_first
     )
     db.add(user)
+    db.flush()  # get user.id before commit
+
+    if invite_row is not None:
+        invite_row.used_by = user.id
+        invite_row.used_at = now
+
     db.commit()
     db.refresh(user)
     

@@ -1,5 +1,23 @@
 # Changelog
 
+## [v2.1.16] - 2026-09-16
+
+### 新增
+- **注册授权码（邀请码）**：非首个用户注册必须填写有效、未使用、未撤销、未过期的授权码；与用户创建在同一事务中原子核销
+- 数据表 `invite_codes`：`code` / `created_by` / `created_at` / `used_by` / `used_at` / `note` / `batch_id` / `expires_at` / `revoked`
+- 管理端 API（需管理员 Token）：
+  - `POST /api/admin/invite-codes` body `{ count: 1-100, note?, expires_days? }` → 授权码列表（含 `batch_id`）
+  - `GET /api/admin/invite-codes?page=&page_size=&status=unused|used|revoked|expired|all`
+  - `POST /api/admin/invite-codes/{id}/revoke`（仅未使用）
+- 注册：`POST /api/auth/register` 增加 `invite_code`（或 `activation_code`）；首个用户仍可无码引导建站
+- 网页：注册页授权码字段；控制台「授权码」页支持批量生成、复制、列表筛选与撤销
+
+### 说明（Android / 客户端）
+- 注册请求体示例：`{ "username", "email", "password", "invite_code": "XXXX-XXXX-XXXX" }`（`activation_code` 同义）
+- 无码 / 无效 / 已用 / 已撤销 / 已过期 → HTTP 400，`detail` 为中文错误信息
+- 管理端生成后把 `code` 分发给用户；列表项 `status` 为 `unused|used|revoked|expired`
+- 管理员通过「用户」页直接创建账号仍不消耗授权码（仅公开注册页 /register API 强制）
+
 ## [v2.1.15] - 2026-09-11
 
 ### 修复
