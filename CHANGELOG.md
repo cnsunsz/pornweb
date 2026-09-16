@@ -1,5 +1,25 @@
 # Changelog
 
+## [v2.1.22] - 2026-09-16
+
+### 新增
+- **管理员手动续期**：用户管理可查看每名用户的会员状态 / 到期时间 / 剩余天数，并「续期」（不消耗授权码）
+  - `GET /api/users/` 每项增加 `access_expires_at`、`access_active`、`access_days_left`、`access_status`（`active`|`expired`|`permanent`|`admin`）
+  - `POST /api/admin/users/{id}/renew` body 任选：`{ "duration_days": N }`（从 `max(now, 当前到期)` 顺延）、`{ "expires_at": "ISO8601" }`、`{ "permanent": true }`（清空到期）
+  - 管理员目标账户：续期不锁死；可设永久；duration 视为永久/无操作
+- **按用户媒体库 ACL**：管理员可为非管理员勾选可访问的媒体库
+  - 表 `user_library_access(user_id, library_id)`；迁移时为**所有已有用户**授予**当时全部媒体库**（避免升级后看不到内容）
+  - 新注册 / 管理端创建的非管理员：自动授予注册/创建时已存在的全部媒体库；**之后新建的媒体库默认不自动下发**，需管理员在用户管理中勾选
+  - 管理员始终可见全部媒体库，忽略 ACL 表
+  - `GET/PUT /api/admin/users/{id}/libraries` body `{ "library_ids": [1,2,...] }`；管理员目标返回 `all_libraries: true`
+  - `GET /api/libraries/`、媒体 list/detail/stream/海报/字幕/continue/genres、演员相关查询对非管理员按 ACL 过滤；越权媒体返回 **403**，`detail`=`无权访问该媒体所在媒体库`
+- 网页：设置 → 用户管理 增加状态列、筛选、续期对话框、媒体库多选
+
+### 说明（Android / 客户端）
+- 续期与 ACL 配置为**网页管理端**能力；普通客户端无需改 UI
+- `/api/libraries/` 与媒体列表对非管理员变为 ACL 过滤后的子集（管理员不变）；若 Android 用同一列表 API，会自动只看到有权媒体库
+- 访问未授权媒体库下的条目：`403` + `无权访问该媒体所在媒体库`
+
 ## [v2.1.21] - 2026-09-16
 
 ### 新增

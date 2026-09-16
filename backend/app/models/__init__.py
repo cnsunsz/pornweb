@@ -5,6 +5,7 @@ from .progress import PlaybackProgress
 from .scan_job import ScanJob
 from .actor_photo import ActorPhoto
 from .invite_code import InviteCode
+from .user_library_access import UserLibraryAccess
 
 __all__ = [
     "User",
@@ -14,4 +15,5 @@ __all__ = [
     "ScanJob",
     "ActorPhoto",
     "InviteCode",
+    "UserLibraryAccess",
 ]

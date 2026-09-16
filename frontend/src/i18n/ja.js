@@ -244,11 +244,17 @@ export default {
   users: {
     title: 'ユーザー管理', add: 'ユーザー追加', edit: 'ユーザー編集', user: 'ユーザー', role: '役割',
     registered: '登録日時', actions: '操作', editBtn: '編集', pwBtn: 'パスワード', delete: '削除',
-    required: '必須', emailBad: '形式が正しくありません', passMin: '6文字以上', cancel: 'キャンセル', save: '保存', create: '作成',
+    required: '必須', emailBad: '形式が不正', passMin: '6文字以上', cancel: 'キャンセル', save: '保存', create: '作成',
     updated: '更新しました', created: '作成しました', fail: '失敗しました', changePw: 'パスワード変更', newPw: '新しいパスワード',
     ok: 'OK', pwOk: 'パスワードを変更しました', pwFail: '失敗しました', confirmDel: '「{name}」を削除しますか？', confirm: '確認', deleted: '削除しました',
+    memberStatus: '会員状態', expiresAt: '有効期限', daysLeft: '残り日数',
+    filterAll: 'すべて', filterActive: '有効', filterExpired: '期限切れ', filterPermanent: '無期限',
+    renewBtn: '更新', renewTitle: '手動更新', renewMode: '方式', renewDays: '日数延長', renewPermanent: '無期限にする',
+    durationDays: '日数', renewOk: '更新しました', libsBtn: 'ライブラリ', libsTitle: 'ライブラリ権限',
+    libsAdminAll: '管理者は全ライブラリにアクセスできます', libsEmpty: 'ライブラリがありません', libsOk: 'ライブラリ権限を保存しました',
   },
   api: {
+    '无权访问该媒体所在媒体库': 'このメディライブラリへのアクセス権がありません',
     '账户不存在': 'アカウントが存在しません', '密码错误': 'パスワードが違います', '用户名已存在': 'ユーザー名は既に使われています',
     '邮箱已被注册': 'このメールは登録済みです', '未登录': 'ログインしてください', '登录已过期，请重新登录': 'セッション切れです。再ログインしてください',
     '需要管理员权限': '管理者権限が必要です', '媒体不存在': 'メディアが見つかりません', '未授权': '権限がありません',

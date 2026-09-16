@@ -11,6 +11,7 @@ from ..models.invite_code import InviteCode
 from ..models.progress import PlaybackProgress
 from ..models.scan_job import ScanJob
 from .deps import get_current_user, user_access_active, access_days_left
+from ..services.library_acl import grant_all_libraries
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -177,6 +178,10 @@ async def register(req: RegisterRequest, db: Session = Depends(get_db)):
     if invite_row is not None:
         invite_row.used_by = user.id
         invite_row.used_at = now
+
+    # New registrant: grant ALL libraries existing at register time
+    if not user.is_admin:
+        grant_all_libraries(db, user.id)
 
     db.commit()
     db.refresh(user)

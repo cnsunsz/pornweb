@@ -10,6 +10,7 @@ from ..models.library import MediaLibrary
 from ..models.media import MediaItem
 from ..models.user import User
 from .deps import get_current_user, get_current_admin, require_media_access
+from ..services.library_acl import allowed_library_ids
 from ..services.scanner import delete_media_by_folder
 from ..services.scan_runner import (
     start_scan, get_latest_job, job_to_dict, running_jobs_by_library,
@@ -63,7 +64,10 @@ async def list_libraries(
     user: User = Depends(require_media_access)
 ):
     result = db.execute(select(MediaLibrary).order_by(MediaLibrary.id))
-    libs = result.scalars().all()
+    libs = list(result.scalars().all())
+    allow = allowed_library_ids(db, user)
+    if allow is not None:
+        libs = [x for x in libs if x.id in allow]
     media_result = db.execute(select(MediaItem))
     items = media_result.scalars().all()
     jobs = running_jobs_by_library(db)

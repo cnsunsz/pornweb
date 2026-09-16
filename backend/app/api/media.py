@@ -14,6 +14,7 @@ from ..models.media import MediaItem
 from ..models.user import User
 from ..models.progress import PlaybackProgress
 from .deps import get_current_user, get_current_admin, require_media_access, assert_media_access
+from ..services.library_acl import apply_media_acl_filter, assert_media_library_access, media_allowed
 from ..services.scanner import scan_directory
 from ..services.subtitles import (
     resolve_video_path,
@@ -144,10 +145,12 @@ async def list_media(
     db: Session = Depends(get_db),
     user: User = Depends(require_media_access)
 ):
-    # 媒体库对所有登录用户共享（Jellyfin/Emby 逻辑）
+    # 媒体库按用户 ACL 过滤（管理员见全部）
     query = select(MediaItem)
     count_query = select(func.count(MediaItem.id))
-    
+    query = apply_media_acl_filter(query, db, user)
+    count_query = apply_media_acl_filter(count_query, db, user)
+
     if category:
         query = query.where(MediaItem.category == category)
         count_query = count_query.where(MediaItem.category == category)
@@ -214,6 +217,7 @@ async def get_detail(
     item = result.scalar_one_or_none()
     if not item:
         raise HTTPException(status_code=404, detail="媒体不存在")
+    assert_media_library_access(db, user, item)
     prow = db.execute(select(PlaybackProgress).where(
         PlaybackProgress.user_id == user.id, PlaybackProgress.media_id == media_id))
     probe = {}
@@ -339,6 +343,7 @@ async def get_fanart(
     if not user:
         raise HTTPException(status_code=401, detail="未授权")
     assert_media_access(user)
+    assert_media_library_access(db, user, item)
     result = db.execute(
         select(MediaItem).where(MediaItem.id == media_id)
     )
@@ -406,6 +411,7 @@ async def list_subtitles(
     if not user:
         raise HTTPException(status_code=401, detail="未授权")
     assert_media_access(user)
+    assert_media_library_access(db, user, item)
     result = db.execute(select(MediaItem).where(MediaItem.id == media_id))
     item = result.scalar_one_or_none()
     if not item:
@@ -436,6 +442,7 @@ async def get_subtitle_status(
     if not user:
         raise HTTPException(status_code=401, detail="未授权")
     assert_media_access(user)
+    assert_media_library_access(db, user, item)
     result = db.execute(select(MediaItem).where(MediaItem.id == media_id))
     item = result.scalar_one_or_none()
     if not item:
@@ -462,6 +469,7 @@ async def get_subtitle_track(
     if not user:
         raise HTTPException(status_code=401, detail="未授权")
     assert_media_access(user)
+    assert_media_library_access(db, user, item)
     result = db.execute(select(MediaItem).where(MediaItem.id == media_id))
     item = result.scalar_one_or_none()
     if not item:
@@ -757,6 +765,7 @@ async def save_progress(
     item = (db.execute(select(MediaItem).where(MediaItem.id == media_id))).scalar_one_or_none()
     if not item:
         raise HTTPException(404, "媒体不存在")
+    assert_media_library_access(db, user, item)
     row = (db.execute(select(PlaybackProgress).where(
         PlaybackProgress.user_id == user.id, PlaybackProgress.media_id == media_id
     ))).scalar_one_or_none()
@@ -792,7 +801,7 @@ async def continue_watching(
         if p.duration and p.position >= p.duration * 0.95:
             continue
         item = (db.execute(select(MediaItem).where(MediaItem.id == p.media_id))).scalar_one_or_none()
-        if item:
+        if item and media_allowed(db, user, item):
             items.append(_to_response(item, p))
     return MediaListResponse(items=items, total=len(items), page=1, page_size=len(items) or 20)
 
@@ -901,9 +910,9 @@ async def list_genres(
     db: Session = Depends(get_db),
     user: User = Depends(require_media_access)
 ):
-    result = db.execute(
-        select(MediaItem.genre).where(MediaItem.genre != "")
-    )
+    gq = select(MediaItem.genre).where(MediaItem.genre != "")
+    gq = apply_media_acl_filter(gq, db, user)
+    result = db.execute(gq)
     genres = set()
     for row in result.scalars():
         for g in row.split(","):

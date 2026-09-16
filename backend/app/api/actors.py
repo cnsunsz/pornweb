@@ -28,6 +28,7 @@ from ..models.media import MediaItem
 from ..models.user import User
 from ..models.progress import PlaybackProgress
 from .deps import get_current_user, get_current_admin, require_media_access, assert_media_access
+from ..services.library_acl import apply_media_acl_filter
 from .media import MediaListResponse, _to_response, _auth_user
 
 router = APIRouter(prefix="/api/actors", tags=["actors"])
@@ -128,7 +129,9 @@ async def list_actors(
 ):
     """列出库中所有可见媒体的演员（登录用户共享库，同 /api/media/list）。"""
     rows = db.execute(
-        select(MediaItem.cast_list).order_by(desc(MediaItem.created_at))
+        apply_media_acl_filter(
+            select(MediaItem.cast_list).order_by(desc(MediaItem.created_at)), db, user
+        )
     ).all()
 
     # name -> count（不再用作品海报冒充演员头像）
@@ -226,7 +229,7 @@ async def scrape_actor_photos(
 ):
     """管理员：批量补刮演员头像（TMDB → 豆瓣名人）。无图记 miss，不造假图。"""
     from ..services.actor_photos import scrape_many
-    rows = db.execute(select(MediaItem.cast_list)).all()
+    rows = db.execute(apply_media_acl_filter(select(MediaItem.cast_list), db, user)).all()
     names = []
     for (cast_raw,) in rows:
         names.extend(_parse_cast(cast_raw))
@@ -284,6 +287,7 @@ async def _actor_media(
         raise HTTPException(status_code=400, detail="演员名不能为空")
 
     query = select(MediaItem)
+    query = apply_media_acl_filter(query, db, user)
     if sort == "newest":
         query = query.order_by(desc(MediaItem.created_at))
     elif sort == "title":
