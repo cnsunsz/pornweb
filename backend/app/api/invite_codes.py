@@ -36,6 +36,29 @@ class GenerateRequest(BaseModel):
     duration_days: Optional[int] = Field(None, ge=1, le=36500)
 
 
+
+class CleanupRequest(BaseModel):
+    """Bulk-delete non-active codes. Default: used only.
+    statuses may include used|revoked|expired; unused only if explicitly listed.
+    """
+    status: Optional[str] = Field(None, description="single status shorthand, e.g. used")
+    statuses: Optional[List[str]] = Field(
+        None, description="explicit list: used|revoked|expired|unused"
+    )
+
+
+class CleanupResponse(BaseModel):
+    deleted: int
+    statuses: List[str]
+
+
+class DeleteResponse(BaseModel):
+    ok: bool = True
+    id: int
+    code: str
+    status: str
+
+
 class InviteCodeResponse(BaseModel):
     id: int
     code: str
@@ -215,3 +238,86 @@ async def revoke_invite_code(
     db.commit()
     db.refresh(row)
     return _to_resp(row)
+
+
+def _resolve_cleanup_statuses(req: CleanupRequest) -> List[str]:
+    allowed = {"used", "revoked", "expired", "unused"}
+    if req.statuses is not None:
+        raw = [str(s).strip().lower() for s in req.statuses if s is not None]
+    elif req.status:
+        raw = [req.status.strip().lower()]
+    else:
+        raw = ["used"]
+    if not raw:
+        raise HTTPException(400, "statuses 不能为空")
+    bad = [s for s in raw if s not in allowed]
+    if bad:
+        raise HTTPException(400, f"非法 status: {', '.join(bad)}；须为 used|revoked|expired|unused")
+    seen = set()
+    out: List[str] = []
+    for s in raw:
+        if s not in seen:
+            seen.add(s)
+            out.append(s)
+    return out
+
+
+def _status_filter_cond(status: str, now: datetime):
+    if status == "used":
+        return InviteCode.used_by.is_not(None)
+    if status == "revoked":
+        return InviteCode.revoked.is_(True)
+    if status == "expired":
+        return and_(
+            InviteCode.used_by.is_(None),
+            InviteCode.revoked.is_(False),
+            InviteCode.expires_at.is_not(None),
+            InviteCode.expires_at < now,
+        )
+    if status == "unused":
+        return and_(
+            InviteCode.used_by.is_(None),
+            InviteCode.revoked.is_(False),
+            or_(InviteCode.expires_at.is_(None), InviteCode.expires_at >= now),
+        )
+    raise HTTPException(400, f"非法 status: {status}")
+
+
+@router.post("/cleanup", response_model=CleanupResponse)
+async def cleanup_invite_codes(
+    req: CleanupRequest,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_admin),
+):
+    """Bulk-delete codes by status. Default deletes used only.
+    Does not touch unused unless unused is explicitly in statuses.
+    """
+    now = datetime.now(timezone.utc)
+    statuses = _resolve_cleanup_statuses(req)
+    conds = [_status_filter_cond(s, now) for s in statuses]
+    where = conds[0] if len(conds) == 1 else or_(*conds)
+    rows = db.execute(select(InviteCode).where(where)).scalars().all()
+    n = len(rows)
+    for row in rows:
+        db.delete(row)
+    db.commit()
+    return CleanupResponse(deleted=n, statuses=statuses)
+
+
+@router.delete("/{code_id}", response_model=DeleteResponse)
+async def delete_invite_code(
+    code_id: int,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_admin),
+):
+    """Delete one invite code (any status: used/revoked/expired/unused)."""
+    now = datetime.now(timezone.utc)
+    row = db.execute(select(InviteCode).where(InviteCode.id == code_id)).scalar_one_or_none()
+    if not row:
+        raise HTTPException(404, "授权码不存在")
+    st = _status(row, now)
+    code = row.code
+    db.delete(row)
+    db.commit()
+    return DeleteResponse(ok=True, id=code_id, code=code, status=st)
+

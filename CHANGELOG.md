@@ -1,5 +1,16 @@
 # Changelog
 
+## [v2.1.18] - 2026-09-16
+
+### 新增
+- **授权码手动清理**：管理端可删除已使用/已撤销/已过期（及单条任意状态）的授权码记录
+- `DELETE /api/admin/invite-codes/{id}` — 删除单条（任意状态，含未使用）
+- `POST /api/admin/invite-codes/cleanup` body `{ "status": "used" }` 或 `{ "statuses": ["used","revoked","expired"] }` — 批量删除；默认仅 `used`；**不会**批量删除未使用有效码，除非 `statuses` 显式包含 `unused`
+- 网页「授权码」：已使用/已撤销/已过期行提供「删除」；「清理已用」按钮确认后批量清理已使用码
+
+### 说明（Android / 客户端）
+- 本能力为**网页管理端专用**；Android 端无需改动
+
 ## [v2.1.17] - 2026-09-16
 
 ### 新增

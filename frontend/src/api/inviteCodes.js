@@ -14,3 +14,13 @@ export function listInviteCodes(params = {}) {
 export function revokeInviteCode(id) {
   return api.post(`/admin/invite-codes/${id}/revoke`)
 }
+
+/** Admin: delete one code (any status) */
+export function deleteInviteCode(id) {
+  return api.delete(`/admin/invite-codes/${id}`)
+}
+
+/** Admin: bulk cleanup. body: { status: 'used' } or { statuses: ['used','revoked','expired'] } */
+export function cleanupInviteCodes(body = { status: 'used' }) {
+  return api.post('/admin/invite-codes/cleanup', body)
+}

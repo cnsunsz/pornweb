@@ -47,13 +47,22 @@
       <template #header>
         <div class="list-head">
           <span class="ch">{{ t('invite.list') }}</span>
-          <el-radio-group v-model="status" size="small" @change="load(1)">
-            <el-radio-button value="all">{{ t('invite.statusAll') }}</el-radio-button>
-            <el-radio-button value="unused">{{ t('invite.statusUnused') }}</el-radio-button>
-            <el-radio-button value="used">{{ t('invite.statusUsed') }}</el-radio-button>
-            <el-radio-button value="revoked">{{ t('invite.statusRevoked') }}</el-radio-button>
-            <el-radio-button value="expired">{{ t('invite.statusExpired') }}</el-radio-button>
-          </el-radio-group>
+          <div class="list-tools">
+            <el-radio-group v-model="status" size="small" @change="load(1)">
+              <el-radio-button value="all">{{ t('invite.statusAll') }}</el-radio-button>
+              <el-radio-button value="unused">{{ t('invite.statusUnused') }}</el-radio-button>
+              <el-radio-button value="used">{{ t('invite.statusUsed') }}</el-radio-button>
+              <el-radio-button value="revoked">{{ t('invite.statusRevoked') }}</el-radio-button>
+              <el-radio-button value="expired">{{ t('invite.statusExpired') }}</el-radio-button>
+            </el-radio-group>
+            <el-button
+              size="small"
+              type="danger"
+              plain
+              :loading="cleanupBusy"
+              @click="doCleanupUsed"
+            >{{ t('invite.cleanupUsed') }}</el-button>
+          </div>
         </div>
       </template>
       <el-table :data="items" stripe v-loading="loading" size="small">
@@ -90,7 +99,7 @@
             <span class="muted">{{ row.duration_days != null ? (row.duration_days + t('invite.daysUnit')) : t('invite.permanent') }}</span>
           </template>
         </el-table-column>
-        <el-table-column :label="t('invite.actions')" width="140" fixed="right">
+        <el-table-column :label="t('invite.actions')" width="200" fixed="right">
           <template #default="{ row }">
             <el-button size="small" text @click="copyOne(row.code)">{{ t('invite.copy') }}</el-button>
             <el-button
@@ -100,6 +109,13 @@
               type="danger"
               @click="doRevoke(row)"
             >{{ t('invite.revoke') }}</el-button>
+            <el-button
+              v-if="row.status === 'used' || row.status === 'revoked' || row.status === 'expired'"
+              size="small"
+              text
+              type="danger"
+              @click="doDelete(row)"
+            >{{ t('invite.delete') }}</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -121,7 +137,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { generateInviteCodes, listInviteCodes, revokeInviteCode } from '@/api/inviteCodes'
+import { generateInviteCodes, listInviteCodes, revokeInviteCode, deleteInviteCode, cleanupInviteCodes } from '@/api/inviteCodes'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 const { t, locale } = useI18n()
@@ -130,6 +146,7 @@ const note = ref('')
 const expiresDays = ref(0)
 const durationDays = ref(30)
 const genBusy = ref(false)
+const cleanupBusy = ref(false)
 const lastGenerated = ref([])
 const items = ref([])
 const loading = ref(false)
@@ -212,6 +229,34 @@ async function doRevoke(row) {
   } catch {}
 }
 
+async function doDelete(row) {
+  try {
+    await ElMessageBox.confirm(t('invite.confirmDelete', { code: row.code }), t('invite.confirm'), { type: 'warning' })
+    await deleteInviteCode(row.id)
+    ElMessage.success(t('invite.deleted'))
+    await load(page.value)
+  } catch {}
+}
+
+async function doCleanupUsed() {
+  try {
+    await ElMessageBox.confirm(t('invite.confirmCleanupUsed'), t('invite.confirm'), { type: 'warning' })
+  } catch {
+    return
+  }
+  cleanupBusy.value = true
+  try {
+    const res = await cleanupInviteCodes({ status: 'used' })
+    const n = res.data?.deleted ?? 0
+    ElMessage.success(t('invite.cleanupOk', { n }))
+    await load(1)
+  } catch (e) {
+    ElMessage.error(e.response?.data?.detail || t('invite.cleanupFail'))
+  } finally {
+    cleanupBusy.value = false
+  }
+}
+
 onMounted(() => load(1))
 </script>
 
@@ -227,6 +272,7 @@ onMounted(() => load(1))
 .code-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
 .code-chip { cursor: pointer; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: 0.04em; }
 .list-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.list-tools { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; cursor: pointer; color: var(--accent); }
 .muted { font-size: 12px; color: var(--text-muted); }
 </style>
