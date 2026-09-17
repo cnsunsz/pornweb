@@ -51,7 +51,7 @@ const rules = computed(() => ({
   email: [{ required: true, message: t('auth.emailRequired') }, { type: 'email', message: t('auth.emailInvalid') }],
   password: [{ required: true, message: t('auth.passRequired') }, { min: 6, message: t('auth.passMin') }],
   confirm: [{ required: true, message: t('auth.confirmRequired') }, { validator: (r, v, cb) => v !== f.password ? cb(new Error(t('auth.passMismatch'))) : cb() }],
-  invite_code: [{ required: true, message: t('auth.inviteRequired') }],
+  invite_code: [],
 }))
 async function submit() {
   try { await formRef.value.validate() } catch { return }

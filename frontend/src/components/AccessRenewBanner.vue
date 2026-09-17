@@ -15,6 +15,7 @@
             @keyup.enter="submit"
           />
           <el-button type="primary" :loading="busy" @click="submit">{{ t('access.renewBtn') }}</el-button>
+          <el-button type="success" plain @click="$router.push('/renew')">{{ t('pay.bannerBtn') }}</el-button>
         </div>
       </div>
     </el-alert>

@@ -35,6 +35,9 @@ class Settings(BaseSettings):
     SCRAPER_JAVDB_COOKIE: str = ""
     SCRAPER_PROXY: str = ""
     SCRAPER_TIMEOUT_SECONDS: float = 8.0
+    # External USDT (TRC20) payment service (usdt-pay).
+    # Real value lives in backend/.env (gitignored) — do not commit server IPs.
+    USDT_PAY_SERVER: str = "http://127.0.0.1:3000"
 
     class Config:
         env_file = str(_ENV_PATH)

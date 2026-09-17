@@ -159,9 +159,11 @@ async def register(req: RegisterRequest, db: Session = Depends(get_db)):
 
     invite_row = None
     now = datetime.now(timezone.utc)
-    if not is_first:
-        invite_row = _claim_invite(db, _normalize_code(req), now)
-    
+    code_str = _normalize_code(req)
+    if not is_first and code_str:
+        # invite code optional: apply membership duration when provided
+        invite_row = _claim_invite(db, code_str, now)
+
     user = User(
         username=username,
         email=email,
@@ -171,6 +173,9 @@ async def register(req: RegisterRequest, db: Session = Depends(get_db)):
     )
     if invite_row is not None:
         _apply_duration(user, invite_row.duration_days, now, extend=False)
+    elif not is_first:
+        # no invite code: registered for free but access locked until USDT payment
+        user.access_expires_at = now
 
     db.add(user)
     db.flush()

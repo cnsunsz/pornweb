@@ -44,6 +44,12 @@ const routes = [
     redirect: { path: '/settings', query: { tab: 'users' } }
   },
   {
+    path: '/renew',
+    name: 'Renew',
+    component: () => import('@/views/Renew.vue'),
+    meta: { requiresAuth: true }
+  },
+  {
     path: '/settings',
     name: 'Settings',
     component: () => import('@/views/Settings.vue'),

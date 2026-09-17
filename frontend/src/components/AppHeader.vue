@@ -21,6 +21,7 @@
       <nav class="nav">
         <router-link to="/" class="nav-item" :class="{active: $route.path==='/'}">{{ t('nav.home') }}</router-link>
         <router-link to="/actors" class="nav-item" :class="{active: $route.path.startsWith('/actors')}">{{ t('nav.actors') }}</router-link>
+        <router-link v-if="!auth.isAdmin" to="/renew" class="nav-item renew" :class="{active: $route.path==='/renew'}">{{ t('pay.bannerBtn') }}</router-link>
         <router-link v-if="auth.isAdmin" to="/settings?tab=libraries" class="nav-item" :class="{active: $route.path==='/settings' && ($route.query.tab==='libraries' || !$route.query.tab)}">{{ t('nav.libraries') }}</router-link>
         <router-link v-if="auth.isAdmin" to="/settings?tab=server" class="nav-item" :class="{active: $route.path==='/settings' && $route.query.tab==='server'}">{{ t('nav.console') }}</router-link>
       </nav>

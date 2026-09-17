@@ -4,8 +4,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from .core.config import settings
 from .core.database import init_db
-from .models import User, MediaItem, MediaLibrary, PlaybackProgress, ScanJob, InviteCode, UserLibraryAccess  # noqa: F401
-from .api import auth, media, users, media_folders, libraries, settings as settings_api, actors, invite_codes
+from .models import User, MediaItem, MediaLibrary, PlaybackProgress, ScanJob, InviteCode, UserLibraryAccess, PaymentOrder  # noqa: F401
+from .api import auth, media, users, media_folders, libraries, settings as settings_api, actors, invite_codes, payments
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -25,7 +25,17 @@ async def lifespan(app: FastAPI):
         start_library_watcher()
     except Exception:
         pass
+    try:
+        from .services.payment_recon import start_payment_recon
+        start_payment_recon()
+    except Exception:
+        pass
     yield
+    try:
+        from .services.payment_recon import stop_payment_recon
+        stop_payment_recon()
+    except Exception:
+        pass
     try:
         from .services.library_watcher import stop_library_watcher
         stop_library_watcher()
@@ -55,6 +65,7 @@ app.include_router(libraries.router)
 app.include_router(settings_api.router)
 app.include_router(actors.router)
 app.include_router(invite_codes.router)
+app.include_router(payments.router)
 
 @app.get("/api/health")
 async def health():
