@@ -83,10 +83,75 @@ def _open_firewall_port(port: int) -> None:
             subprocess.run(["netfilter-persistent", "save"], check=False, capture_output=True)
 
 
+def _close_firewall_port(port: int) -> None:
+    """Best-effort remove TCP allow for a port (ufw or iptables). Never raises."""
+    from shutil import which
+    try:
+        if which("ufw"):
+            subprocess.run(
+                ["ufw", "delete", "allow", f"{port}/tcp"],
+                check=False,
+                capture_output=True,
+            )
+            return
+        if which("iptables"):
+            # Remove every matching ACCEPT rule (iptables -D one at a time)
+            while True:
+                check = subprocess.run(
+                    [
+                        "iptables", "-C", "INPUT", "-p", "tcp",
+                        "--dport", str(port), "-j", "ACCEPT",
+                    ],
+                    capture_output=True,
+                )
+                if check.returncode != 0:
+                    break
+                subprocess.run(
+                    [
+                        "iptables", "-D", "INPUT", "-p", "tcp",
+                        "--dport", str(port), "-j", "ACCEPT",
+                    ],
+                    check=False,
+                    capture_output=True,
+                )
+            if which("netfilter-persistent") or Path("/usr/sbin/netfilter-persistent").exists():
+                subprocess.run(["netfilter-persistent", "save"], check=False, capture_output=True)
+    except Exception:
+        pass
+
+
+def _listen_ports(text: str) -> set:
+    """Ports referenced by listen directives (IPv4/IPv6)."""
+    found = set()
+    for m in re.finditer(r"(?m)^\s*listen\s+(?:\[[^\]]+\]:)?(\d+)(?:\s|;)", text):
+        found.add(int(m.group(1)))
+    return found
+
+
+def _rewrite_public_listens(conf: str, port: int) -> str:
+    """Keep only listen {port} (+ default_server iff 80) and always listen 2052."""
+    # Drop every listen line; re-insert the desired set after server {
+    # Use [ \t]* not \s* after ';' so we do not swallow the next line's indent/newline
+    # in a way that breaks ^ matching for subsequent listen lines.
+    conf2 = re.sub(r"(?m)^\s*listen\s+[^;]+;[ \t]*\n?", "", conf)
+    lines = []
+    if int(port) == 80:
+        lines.append(f"    listen {int(port)} default_server;")
+    else:
+        lines.append(f"    listen {int(port)};")
+    if int(port) != 2052:
+        lines.append("    listen 2052;")
+    block = "\n".join(lines) + "\n"
+    if "server {" not in conf2:
+        raise ValueError("no server block")
+    return conf2.replace("server {", f"server {{\n{block}", 1)
+
+
 _NGINX_VHOST = _nginx_vhost()
 _NGINX_BIN = _resolve_nginx_bin()
 _UNIT = Path("/etc/systemd/system/mediavault.service")
 _RESERVED = {22, 25, 888}
+_ALWAYS_LISTEN = {2052}  # Android clients hardcoded/default to :2052
 
 
 class ServerSettings(BaseModel):
@@ -183,6 +248,13 @@ def _write_env_all(updates: dict):
 
 
 def _apply_public_port(port: int):
+    """Self-serve PUBLIC_PORT: rewrite nginx listens to {port}+2052, firewall, reload.
+
+    - Ensures listen N (default_server only when N==80).
+    - Removes other public listen lines; always keeps listen 2052.
+    - Does not touch backend HTTP_PORT / BIND_HOST.
+    """
+    port = int(port)
     if port in _RESERVED:
         raise HTTPException(400, f"端口 {port} 不可用作对外 HTTP")
     vhost = _nginx_vhost()
@@ -191,16 +263,24 @@ def _apply_public_port(port: int):
     conf = vhost.read_text(encoding="utf-8")
     if "server {" not in conf:
         raise HTTPException(500, "Nginx 站点配置格式异常")
-    # Do NOT strip other listen lines (keep 80/2052/2095 etc.); only ensure target exists
-    if not _has_listen(conf, port):
-        conf = conf.replace("server {", f"server {{\n    listen {port};", 1)
-        vhost.write_text(conf, encoding="utf-8")
+    old_ports = _listen_ports(conf)
+    try:
+        new_conf = _rewrite_public_listens(conf, port)
+    except ValueError:
+        raise HTTPException(500, "Nginx 站点配置格式异常")
+    # Backup then write; restore on nginx -t failure
+    backup = conf
+    vhost.write_text(new_conf, encoding="utf-8")
     _open_firewall_port(port)
+    if port != 2052:
+        _open_firewall_port(2052)
     nginx = _resolve_nginx_bin()
     if not nginx.exists():
+        vhost.write_text(backup, encoding="utf-8")
         raise HTTPException(500, "未找到 Nginx")
     test = subprocess.run([str(nginx), "-t"], capture_output=True, text=True)
     if test.returncode != 0:
+        vhost.write_text(backup, encoding="utf-8")
         err = (test.stderr or test.stdout).strip()
         raise HTTPException(500, f"Nginx 配置失败: {err}")
     rel = subprocess.run([str(nginx), "-s", "reload"], capture_output=True, text=True)
@@ -208,8 +288,25 @@ def _apply_public_port(port: int):
         # Fallback for system nginx managed by systemd
         rel2 = subprocess.run(["systemctl", "reload", "nginx"], capture_output=True, text=True)
         if rel2.returncode != 0:
+            vhost.write_text(backup, encoding="utf-8")
+            # best-effort re-test/reload previous config
+            subprocess.run([str(nginx), "-t"], capture_output=True, text=True)
+            subprocess.run([str(nginx), "-s", "reload"], capture_output=True, text=True)
             err = (rel.stderr or rel.stdout or rel2.stderr or rel2.stdout).strip()
             raise HTTPException(500, f"Nginx 重载失败: {err}")
+    # Optionally drop firewall allows for ports no longer listened
+    keep = {port, 2052} | _RESERVED
+    # Never close backend HTTP_PORT (8099) or bind-related; read from env best-effort
+    try:
+        env = _read_env(_ENV_PATH)
+        hp = int(env.get("HTTP_PORT") or 8099)
+        keep.add(hp)
+    except Exception:
+        keep.add(8099)
+    for p in sorted(old_ports - keep):
+        if p in _ALWAYS_LISTEN:
+            continue
+        _close_firewall_port(p)
 
 
 def _apply_bind(host: str, http_port: int):
