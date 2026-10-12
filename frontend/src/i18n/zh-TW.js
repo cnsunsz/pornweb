@@ -164,7 +164,7 @@ export default {
     network: '網路', httpPort: '後端連接埠', httpPortHint: 'API / 播放連接埠，預設 8099',
     bind: '監聽位址', bindLocal: '僅本機 127.0.0.1', bindLan: '區域網路 0.0.0.0',
     bindHint: '0.0.0.0 允許其他裝置存取', publicPort: '對外 HTTP 連接埠',
-    publicHint: 'Nginx 對外連接埠，預設 5588（本機測試走 5173）',
+    publicHint: 'Nginx 對外連接埠，預設 80（本機測試走 5173）',
     paths: '路徑', mediaRoot: '預設媒體根目錄', mediaRootPh: '掃描時的預設根目錄，資料庫仍可填任意絕對路徑',
     envFile: '設定檔', save: '儲存', saved: '已儲存', savedRestart: '已儲存，請重新啟動服務',
     saveFail: '儲存失敗', restartAlert: '已儲存。請重新啟動 PornWeb 服務使連接埠生效。',

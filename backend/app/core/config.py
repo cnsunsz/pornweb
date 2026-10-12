@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     MEDIA_ROOT: str = "/var/lib/mediavault/media"
     HTTP_PORT: int = 8099
     BIND_HOST: str = "127.0.0.1"
-    PUBLIC_PORT: int = 5588
+    PUBLIC_PORT: int = 80
     # Emby-style auto library scan (watchdog + periodic safety net for rclone FUSE)
     AUTO_SCAN_ENABLED: bool = True
     AUTO_SCAN_INTERVAL_MINUTES: int = 15

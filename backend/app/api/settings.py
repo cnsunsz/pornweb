@@ -129,7 +129,7 @@ def _listen_ports(text: str) -> set:
 
 
 def _rewrite_public_listens(conf: str, port: int) -> str:
-    """Keep only listen {port} (+ default_server iff 80) and always listen 2052."""
+    """Keep only listen {port} (+ default_server iff port==80). No fixed extra port."""
     # Drop every listen line; re-insert the desired set after server {
     # Use [ \t]* not \s* after ';' so we do not swallow the next line's indent/newline
     # in a way that breaks ^ matching for subsequent listen lines.
@@ -139,8 +139,6 @@ def _rewrite_public_listens(conf: str, port: int) -> str:
         lines.append(f"    listen {int(port)} default_server;")
     else:
         lines.append(f"    listen {int(port)};")
-    if int(port) != 2052:
-        lines.append("    listen 2052;")
     block = "\n".join(lines) + "\n"
     if "server {" not in conf2:
         raise ValueError("no server block")
@@ -151,14 +149,13 @@ _NGINX_VHOST = _nginx_vhost()
 _NGINX_BIN = _resolve_nginx_bin()
 _UNIT = Path("/etc/systemd/system/mediavault.service")
 _RESERVED = {22, 25, 888}
-_ALWAYS_LISTEN = {2052}  # Android clients hardcoded/default to :2052
 
 
 class ServerSettings(BaseModel):
     app_name: str = "PornWeb"
     http_port: int = Field(8099, ge=1, le=65535)
     bind_host: str = "127.0.0.1"
-    public_port: int = Field(5588, ge=1, le=65535)
+    public_port: int = Field(80, ge=1, le=65535)
     media_root: str = ""
     auto_scan_enabled: bool = True
     auto_scan_interval_minutes: int = Field(15, ge=1, le=1440)
@@ -248,10 +245,10 @@ def _write_env_all(updates: dict):
 
 
 def _apply_public_port(port: int):
-    """Self-serve PUBLIC_PORT: rewrite nginx listens to {port}+2052, firewall, reload.
+    """Self-serve PUBLIC_PORT: rewrite nginx to listen ONLY on {port}, firewall, reload.
 
     - Ensures listen N (default_server only when N==80).
-    - Removes other public listen lines; always keeps listen 2052.
+    - Removes every other public listen line (no fixed special port).
     - Does not touch backend HTTP_PORT / BIND_HOST.
     """
     port = int(port)
@@ -272,8 +269,6 @@ def _apply_public_port(port: int):
     backup = conf
     vhost.write_text(new_conf, encoding="utf-8")
     _open_firewall_port(port)
-    if port != 2052:
-        _open_firewall_port(2052)
     nginx = _resolve_nginx_bin()
     if not nginx.exists():
         vhost.write_text(backup, encoding="utf-8")
@@ -295,7 +290,7 @@ def _apply_public_port(port: int):
             err = (rel.stderr or rel.stdout or rel2.stderr or rel2.stdout).strip()
             raise HTTPException(500, f"Nginx 重载失败: {err}")
     # Optionally drop firewall allows for ports no longer listened
-    keep = {port, 2052} | _RESERVED
+    keep = {port} | _RESERVED
     # Never close backend HTTP_PORT (8099) or bind-related; read from env best-effort
     try:
         env = _read_env(_ENV_PATH)
@@ -304,8 +299,6 @@ def _apply_public_port(port: int):
     except Exception:
         keep.add(8099)
     for p in sorted(old_ports - keep):
-        if p in _ALWAYS_LISTEN:
-            continue
         _close_firewall_port(p)
 
 

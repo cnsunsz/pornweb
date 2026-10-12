@@ -449,7 +449,7 @@ const form = reactive({
   app_name: 'PornWeb',
   http_port: 8099,
   bind_host: '127.0.0.1',
-  public_port: 5588,
+  public_port: 80,
   media_root: '',
   auto_scan_enabled: true,
   auto_scan_interval_minutes: 15,

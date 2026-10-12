@@ -166,7 +166,7 @@ export default {
     network: 'Networking', httpPort: 'Backend port', httpPortHint: 'API / streaming port, default 8099',
     bind: 'Bind address', bindLocal: 'Localhost 127.0.0.1', bindLan: 'LAN 0.0.0.0',
     bindHint: '0.0.0.0 allows other devices', publicPort: 'Public HTTP port',
-    publicHint: 'Nginx public port, default 5588 (local dev uses 5173)',
+    publicHint: 'Nginx public port, default 80 (local dev uses 5173)',
     paths: 'Paths', mediaRoot: 'Default media root', mediaRootPh: 'Default scan root; libraries can still use any absolute path',
     envFile: 'Config file', save: 'Save', saved: 'Saved', savedRestart: 'Saved. Restart the service.',
     saveFail: 'Save failed', restartAlert: 'Saved. Restart PornWeb for the port to apply.',

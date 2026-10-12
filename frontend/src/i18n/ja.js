@@ -164,7 +164,7 @@ export default {
     network: 'ネットワーク', httpPort: 'バックエンドポート', httpPortHint: 'API / 再生ポート（既定 8099）',
     bind: 'バインドアドレス', bindLocal: 'ローカル 127.0.0.1', bindLan: 'LAN 0.0.0.0',
     bindHint: '0.0.0.0 は他の端末からアクセスできます', publicPort: '公開 HTTP ポート',
-    publicHint: 'Nginx の公開ポート（既定 5588、ローカル開発は 5173）',
+    publicHint: 'Nginx の公開ポート（既定 80、ローカル開発は 5173）',
     paths: 'パス', mediaRoot: '既定のメディアルート', mediaRootPh: 'スキャン時の既定ルート。ライブラリは任意の絶対パス可',
     envFile: '設定ファイル', save: '保存', saved: '保存しました', savedRestart: '保存しました。サービスを再起動してください',
     saveFail: '保存に失敗しました', restartAlert: '保存しました。ポートを反映するには PornWeb を再起動してください。',

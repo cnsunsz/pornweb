@@ -184,7 +184,7 @@ export default {
     bindLan: '局域网 0.0.0.0',
     bindHint: '0.0.0.0 允许其它设备访问',
     publicPort: '对外 HTTP 端口',
-    publicHint: 'Nginx 对外端口，默认 5588（本机测试走 5173）',
+    publicHint: 'Nginx 对外端口，默认 80（本机测试走 5173）',
     paths: '路径',
     mediaRoot: '默认媒体根目录',
     mediaRootPh: '扫描时的默认根，库仍可填任意绝对路径',

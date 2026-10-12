@@ -55,7 +55,7 @@ systemctl daemon-reload && systemctl enable mediavault && systemctl start mediav
 
 cat > /etc/nginx/sites-available/mediavault << 'EOF'
 server {
-    listen 5588;
+    listen 80 default_server;
     server_name _;
     root /www/mediavault/frontend;
     index index.html;

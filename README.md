@@ -65,7 +65,7 @@ DEPLOY.md         更细的部署步骤
 1. 后端放到 `/www/mediavault/backend/`；前端先构建，把产物放到 `/www/mediavault/frontend/`。
 2. 在服务器上执行仓库里的 `setup.sh`，或按 `DEPLOY.md` 配置 systemd 与 Nginx。
 3. 编辑 `/www/mediavault/backend/.env`（至少改 `SECRET_KEY`、`MEDIA_ROOT`）。
-4. Nginx 对外端口看 `.env` 里的 `PUBLIC_PORT`（示例默认 `5588`）。站点根目录指向前端静态文件，`/api/` 反代到本机 `8099`。
+4. Nginx 对外端口看 `.env` 里的 `PUBLIC_PORT`（示例默认 `80`）。站点根目录指向前端静态文件，`/api/` 反代到本机 `8099`。
 
 示例配置在 `deploy/nginx_mediavault.conf`。`index.html` 不要缓存（模板已加 `Cache-Control: no-store`），带 hash 的 js/css 可以长期缓存。
 
@@ -99,7 +99,7 @@ Debian 包说明见 `packaging/README.md`。
 | `MEDIA_ROOT` | 视部署而定 | 媒体根目录 |
 | `HTTP_PORT` | `8099` | 后端监听端口 |
 | `BIND_HOST` | `127.0.0.1` | `0.0.0.0` 允许局域网或经反代访问 |
-| `PUBLIC_PORT` | `5588` | Nginx 对外端口 |
+| `PUBLIC_PORT` | `80` | Nginx 对外端口 |
 | `CORS_ORIGINS` | `["*"]` | 跨域来源 |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | `1440` | 登录有效期（分钟） |
 | `AUTO_SCAN_ENABLED` | `true` | 自动扫库 |

@@ -1,5 +1,15 @@
 # Changelog
 
+## [v2.1.25] - 2026-10-12
+
+### 改进
+- **去掉固定 2052**：管理端改 `PUBLIC_PORT` 时，nginx 只监听设置的那一个端口（`N==80` 时 `default_server`）；不再额外保留 Android 专用 `listen 2052`
+- 防火墙：仅放行当前对外端口；对已移除的旧端口（含 2052）做 best-effort 关闭
+- 默认对外端口改为 **80**：`ServerSettings` / `config.PUBLIC_PORT` / `.env.example` / 管理端表单与 i18n 提示，不再显示 5588
+
+### 说明
+- VPS 现网：仅 `listen 80 default_server`；2052 已从站点与防火墙移除
+
 ## [v2.1.24] - 2026-10-12
 
 ### 改进
