@@ -95,6 +95,7 @@ def probe_file(path: Path, use_cache: bool = True) -> Dict[str, Any]:
         "audio_codecs": [],
         "audio_codec": "",
         "audio_channels": 0,
+        "duration": 0.0,
         "needs_audio_remux": False,
         "probed": False,
         "error": None,
@@ -107,10 +108,12 @@ def probe_file(path: Path, use_cache: bool = True) -> Dict[str, Any]:
     key = _cache_key(path)
     if use_cache:
         with _lock:
-            if key in _mem:
-                return dict(_mem[key])
+            cached = _mem.get(key)
+            # Stale pre-duration cache entries must be re-probed
+            if cached and cached.get("probed") and "duration" in cached:
+                return dict(cached)
         disk = _disk_get(key)
-        if disk and disk.get("probed"):
+        if disk and disk.get("probed") and "duration" in disk:
             with _lock:
                 _mem[key] = disk
             return dict(disk)
@@ -126,7 +129,7 @@ def probe_file(path: Path, use_cache: bool = True) -> Dict[str, Any]:
     try:
         cmd = [
             "ffprobe", "-v", "error",
-            "-show_entries", "format=format_name:stream=index,codec_type,codec_name,channels",
+            "-show_entries", "format=format_name,duration:stream=index,codec_type,codec_name,channels",
             "-of", "json",
             str(path),
         ]
@@ -140,7 +143,15 @@ def probe_file(path: Path, use_cache: bool = True) -> Dict[str, Any]:
             empty["needs_audio_remux"] = True
         return empty
 
-    fmt = ((data.get("format") or {}).get("format_name") or "")
+    fmt_obj = data.get("format") or {}
+    fmt = (fmt_obj.get("format_name") or "")
+    duration_sec = 0.0
+    try:
+        duration_sec = float(fmt_obj.get("duration") or 0) or 0.0
+    except (TypeError, ValueError):
+        duration_sec = 0.0
+    if duration_sec < 0:
+        duration_sec = 0.0
     container = "matroska" if "matroska" in fmt.lower() or path.suffix.lower() == ".mkv" else (
         "mp4" if "mp4" in fmt.lower() or path.suffix.lower() in (".mp4", ".m4v") else fmt.split(",")[0]
     )
@@ -184,6 +195,7 @@ def probe_file(path: Path, use_cache: bool = True) -> Dict[str, Any]:
         "audio_codecs": auds,
         "audio_codec": auds[0] if auds else "",
         "audio_channels": channels,
+        "duration": duration_sec,
         "needs_audio_remux": need,
         "preferred_audio_index": preferred_idx,
         "remux_mode": remux_mode,

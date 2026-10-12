@@ -365,18 +365,39 @@ function onProgressHover(e) {
   hoverX.value = e.clientX - rect.left
 }
 
+function adoptDuration(candidate, { allowShorter = false } = {}) {
+  const c = Number(candidate) || 0
+  if (!(c > 0) || !isFinite(c)) return
+  const server = Number(props.mediaDuration) || 0
+  const cur = Number(duration.value) || 0
+  // Never replace a longer trusted duration with remux/HTML5 short junk
+  if (!allowShorter && cur > 0 && c + 1 < cur) return
+  if (!allowShorter && server > 0 && c + 1 < server && c < 120) return
+  duration.value = Math.max(c, server > 0 ? server : 0, allowShorter ? 0 : cur)
+  if (server > 0 && duration.value < server) duration.value = server
+}
+
 function onLoaded() {
   playError.value = ''
+  // Server/API duration wins for remux (fMP4 pipe has no reliable moov duration)
+  if (props.mediaDuration > 0) duration.value = props.mediaDuration
   const d = videoEl.value.duration
   if (d && isFinite(d) && d > 0 && !props.webRemux) {
-    duration.value = d
-  } else if (d && isFinite(d) && d > 0 && props.webRemux && !duration.value) {
-    duration.value = remuxBaseStart + d
+    adoptDuration(d)
+  } else if (d && isFinite(d) && d > 0 && props.webRemux && !(props.mediaDuration > 0) && !duration.value) {
+    adoptDuration(remuxBaseStart + d)
   }
-  // Prefer server-known duration from localStorage progress payload if present
+  // localStorage only if it does not poison a longer server duration
   try {
-    const kd = localStorage.getItem(props.mediaId ? `mv_dur_${props.mediaId}` : '')
-    if (kd && Number(kd) > 0) duration.value = Number(kd)
+    const key = props.mediaId ? `mv_dur_${props.mediaId}` : ''
+    const kd = key ? Number(localStorage.getItem(key) || 0) : 0
+    if (kd > 0) {
+      if (props.mediaDuration > 60 && kd < props.mediaDuration * 0.5) {
+        localStorage.removeItem(key)
+      } else {
+        adoptDuration(kd)
+      }
+    }
   } catch {}
   baseRate = prefs.defaultSpeed
   applyRate(prefs.defaultSpeed)
@@ -415,7 +436,8 @@ function onTimeUpdate() {
     }
   } else {
     currentTime.value = videoEl.value.currentTime
-    duration.value = videoEl.value.duration || 0
+    const vd = videoEl.value.duration || 0
+    if (vd && isFinite(vd) && vd > 0) adoptDuration(vd)
   }
   playedPercent.value = duration.value ? (currentTime.value / duration.value) * 100 : 0
   if (videoEl.value.buffered.length > 0 && duration.value) {
@@ -469,15 +491,22 @@ function savePosition() {
   if (key && currentTime.value > 5) {
     localStorage.setItem(key, String(Math.floor(currentTime.value)))
   }
-  if (props.mediaId && duration.value > 0) {
-    localStorage.setItem(`mv_dur_${props.mediaId}`, String(Math.floor(duration.value)))
+  const reportDur = (() => {
+    const d = Number(duration.value) || 0
+    const server = Number(props.mediaDuration) || 0
+    // Prefer server when player duration looks like remux junk
+    if (server > 60 && d > 0 && d < server * 0.5) return server
+    return Math.max(d, server)
+  })()
+  if (props.mediaId && reportDur > 0) {
+    localStorage.setItem(`mv_dur_${props.mediaId}`, String(Math.floor(reportDur)))
   }
   const now = Date.now()
   if (props.mediaId && now - lastSave > 4000) {
     lastSave = now
     saveProgress(props.mediaId, {
       position: currentTime.value,
-      duration: duration.value || 0,
+      duration: reportDur || 0,
       part: props.part || 0
     }).catch(() => {})
   }
@@ -963,9 +992,12 @@ onUnmounted(() => {
   revokeSubBlob()
   endRewind()
   if (props.mediaId && currentTime.value > 5) {
+    const server = Number(props.mediaDuration) || 0
+    const d = Number(duration.value) || 0
+    const reportDur = (server > 60 && d > 0 && d < server * 0.5) ? server : Math.max(d, server)
     saveProgress(props.mediaId, {
       position: currentTime.value,
-      duration: duration.value || 0,
+      duration: reportDur || 0,
       part: props.part || 0
     }).catch(() => {})
   }

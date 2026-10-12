@@ -105,6 +105,60 @@ def _public_fanart_url(item: MediaItem) -> str:
     return ""
 
 
+
+def _player_duration_plausible(item: MediaItem, player_dur: float) -> bool:
+    """Reject HTML5/fMP4 garbage durations that would poison media_items.duration.
+
+    Web remux (empty_moov fMP4 pipe) often reports a few seconds early on; writing
+    that into media_items makes the progress bar stick at 0:06 forever.
+    """
+    try:
+        d = float(player_dur or 0)
+    except (TypeError, ValueError):
+        return False
+    if d <= 0 or not (d == d) or d == float("inf"):  # NaN/inf
+        return False
+    existing = float(item.duration or 0)
+    # Never shrink a longer known duration
+    if existing > 0 and d + 1.0 < existing:
+        return False
+    size = int(item.file_size or 0)
+    # Large files cannot be a few seconds
+    if size >= 50 * 1024 * 1024 and d < 60:
+        return False
+    # Reject absurd average bitrate (> ~200 Mbps for whole file)
+    if size >= 1024 * 1024 and d > 0:
+        min_sec = (size * 8.0) / 200_000_000.0
+        if d < min_sec:
+            return False
+    return True
+
+
+def _maybe_backfill_duration(db: Session, item: MediaItem, probe: Optional[dict]) -> float:
+    """Prefer ffprobe duration when DB duration is missing or poisoned short."""
+    probe = probe or {}
+    try:
+        probed = float(probe.get("duration") or 0)
+    except (TypeError, ValueError):
+        probed = 0.0
+    cur = float(item.duration or 0)
+    size = int(item.file_size or 0)
+    poisoned = cur > 0 and cur < 60 and size >= 50 * 1024 * 1024
+    if probed > 1 and (cur <= 0 or poisoned or (cur > 0 and probed > cur * 1.5 and cur < 120)):
+        item.duration = probed
+        try:
+            db.commit()
+            db.refresh(item)
+        except Exception:
+            try:
+                db.rollback()
+            except Exception:
+                pass
+            item.duration = probed
+        return probed
+    return cur
+
+
 def _to_response(item: MediaItem, progress=None, probe: Optional[dict] = None) -> MediaResponse:
     probe = probe or {}
     # Heuristic for list cards: MKV without probe → prefer web remux path
@@ -226,6 +280,7 @@ async def get_detail(
         probe = probe_file(video)
     except Exception:
         probe = {}
+    _maybe_backfill_duration(db, item, probe)
     return _to_response(item, prow.scalar_one_or_none(), probe=probe)
 
 async def _auth_user(request: Request, token: Optional[str], db: Session) -> Optional[User]:
@@ -692,14 +747,24 @@ async def stream_media_web(
             logger.warning("web remux: %s", exc)
             return
 
+    # Hint real duration for clients; fMP4 pipe has no Content-Length / moov duration.
+    dur_hint = float(item.duration or 0)
+    if dur_hint <= 0:
+        try:
+            dur_hint = float(probe.get("duration") or 0)
+        except (TypeError, ValueError):
+            dur_hint = 0.0
+    headers = {
+        "Cache-Control": "no-store",
+        "Accept-Ranges": "none",
+        "X-PornWeb-Remux": audio_mode,
+    }
+    if dur_hint > 0:
+        headers["X-Media-Duration"] = f"{dur_hint:.3f}"
     return StreamingResponse(
         gen(),
         media_type="video/mp4",
-        headers={
-            "Cache-Control": "no-store",
-            "Accept-Ranges": "none",
-            "X-PornWeb-Remux": audio_mode,
-        },
+        headers=headers,
     )
 
 
@@ -769,19 +834,26 @@ async def save_progress(
     row = (db.execute(select(PlaybackProgress).where(
         PlaybackProgress.user_id == user.id, PlaybackProgress.media_id == media_id
     ))).scalar_one_or_none()
+    apply_item = _player_duration_plausible(item, req.duration)
     if row:
         row.position = max(0, req.position)
         row.part = max(0, req.part)
         if req.duration > 0:
-            row.duration = req.duration
-            item.duration = req.duration
+            # Keep progress.duration for UI resume math, but never poison media_items
+            # with remux/HTML5 short readings; only grow when plausible.
+            if apply_item or not (row.duration and float(row.duration) > 0):
+                if apply_item or float(req.duration) >= float(row.duration or 0):
+                    row.duration = req.duration
+            if apply_item:
+                item.duration = max(float(item.duration or 0), float(req.duration))
     else:
+        prog_dur = float(req.duration or 0) if (apply_item or float(req.duration or 0) >= 60) else 0.0
         db.add(PlaybackProgress(
             user_id=user.id, media_id=media_id,
-            position=max(0, req.position), duration=req.duration or 0, part=max(0, req.part)
+            position=max(0, req.position), duration=prog_dur, part=max(0, req.part)
         ))
-        if req.duration > 0:
-            item.duration = req.duration
+        if apply_item:
+            item.duration = max(float(item.duration or 0), float(req.duration))
     db.commit()
     return {"ok": True}
 

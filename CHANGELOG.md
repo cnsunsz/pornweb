@@ -1,5 +1,22 @@
 # Changelog
 
+## [v2.1.26] - 2026-10-12
+
+### 修复
+- **网页进度条显示 0:06（如《铁道飞虎》）**：根因不是文件被截断。原始 `/stream/{id}` Content-Length=整文件且 Accept-Ranges 正常；`/stream/{id}/web` fMP4 pipe 无 Content-Length，浏览器早期会读出几秒假时长；`PUT /progress` 把该假时长写进 `media_items.duration`，详情页 `media-duration` 把进度条锁死
+- 进度接口：**不再用过短/不合理的播放器时长覆盖** `media_items.duration`（大文件 <60s、荒谬码率、缩短已有时长一律拒绝）
+- 详情接口：ffprobe 得到真实 `duration` 后，对缺失或「大文件却只有几秒」的条目自动回填
+- 播放器：优先信任 API `mediaDuration`；忽略会毒化更长服务端时长的 `localStorage mv_dur_*`；上报进度时用服务端时长兜底
+
+### 改进
+- `avprobe` 增加 `format.duration`；旧 probe 缓存无 `duration` 字段时自动重探
+- 网页 remux 响应增加 `X-Media-Duration` 提示头（供调试/客户端）
+
+### 说明（Android / 客户端）
+- 同一 `PUT /api/media/progress/{id}` 与 `GET /api/media/detail/{id}`：后端已防毒化并回填真实时长；Android 进度条若仍用本地缓存的短 duration，清缓存或重新拉 detail 即可
+- 原始直链流（Android/外部播放器）本身 Content-Length 正确，本问题主要影响网页 remux + 被毒化的 duration 字段
+
+
 ## [v2.1.25] - 2026-10-12
 
 ### 改进
