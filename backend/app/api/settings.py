@@ -21,19 +21,70 @@ KEYS = ("HTTP_PORT", "BIND_HOST", "PUBLIC_PORT", "MEDIA_ROOT", "APP_NAME",
         "SCRAPER_TIMEOUT_SECONDS")
 _BACKEND_ENV = Path("/www/mediavault/backend/.env")
 def _nginx_vhost() -> Path:
+    """Resolve mediavault nginx vhost: system sites-* first, Baota as fallback."""
+    for p in (
+        Path("/etc/nginx/sites-available/mediavault"),
+        Path("/etc/nginx/sites-enabled/mediavault"),
+    ):
+        try:
+            if p.exists() and p.is_file() and p.stat().st_size > 0:
+                return p.resolve() if p.is_symlink() else p
+        except OSError:
+            continue
     d = Path("/www/server/panel/vhost/nginx")
     for name in ("html_mediavault.conf", "mediavault.conf"):
         c = d / name
         if c.exists() and c.stat().st_size > 0:
             return c
-    hits = sorted(d.glob("*mediavault*.conf"))
-    for c in hits:
-        if c.stat().st_size > 0:
-            return c
-    return d / "html_mediavault.conf"
+    if d.is_dir():
+        hits = sorted(d.glob("*mediavault*.conf"))
+        for c in hits:
+            if c.stat().st_size > 0:
+                return c
+    return Path("/etc/nginx/sites-available/mediavault")
+
+
+def _resolve_nginx_bin() -> Path:
+    """Prefer system nginx (which /usr/sbin), then Baota binary."""
+    from shutil import which
+    found = which("nginx")
+    if found:
+        return Path(found)
+    for cand in (Path("/usr/sbin/nginx"), Path("/www/server/nginx/sbin/nginx")):
+        if cand.exists():
+            return cand
+    return Path("/usr/sbin/nginx")
+
+
+def _has_listen(text: str, port: int) -> bool:
+    """True if a listen directive already covers this port (IPv4/IPv6, with flags)."""
+    pat = rf"(?m)^\s*listen\s+(?:\[[^\]]+\]:)?{int(port)}(?:\s|;)"
+    return bool(re.search(pat, text))
+
+
+def _open_firewall_port(port: int) -> None:
+    """Open TCP port: ufw if present, else iptables (+ netfilter-persistent save)."""
+    from shutil import which
+    if which("ufw"):
+        subprocess.run(["ufw", "allow", f"{port}/tcp"], check=False, capture_output=True)
+        return
+    if which("iptables"):
+        check = subprocess.run(
+            ["iptables", "-C", "INPUT", "-p", "tcp", "--dport", str(port), "-j", "ACCEPT"],
+            capture_output=True,
+        )
+        if check.returncode != 0:
+            subprocess.run(
+                ["iptables", "-I", "INPUT", "-p", "tcp", "--dport", str(port), "-j", "ACCEPT"],
+                check=False,
+                capture_output=True,
+            )
+        if which("netfilter-persistent") or Path("/usr/sbin/netfilter-persistent").exists():
+            subprocess.run(["netfilter-persistent", "save"], check=False, capture_output=True)
+
 
 _NGINX_VHOST = _nginx_vhost()
-_NGINX_BIN = Path("/www/server/nginx/sbin/nginx")
+_NGINX_BIN = _resolve_nginx_bin()
 _UNIT = Path("/etc/systemd/system/mediavault.service")
 _RESERVED = {22, 25, 888}
 
@@ -137,23 +188,28 @@ def _apply_public_port(port: int):
     vhost = _nginx_vhost()
     if not vhost.exists():
         raise HTTPException(500, "未找到 Nginx 站点配置")
-    text = vhost.read_text(encoding="utf-8")
-    text = re.sub(r"^\s*listen\s+[^;]+;\s*\n", "", text, flags=re.M)
-    if "server {" not in text:
+    conf = vhost.read_text(encoding="utf-8")
+    if "server {" not in conf:
         raise HTTPException(500, "Nginx 站点配置格式异常")
-    text = text.replace("server {", f"server {{\n    listen {port};", 1)
-    vhost.write_text(text, encoding="utf-8")
-    subprocess.run(["ufw", "allow", f"{port}/tcp"], check=False, capture_output=True)
-    if not _NGINX_BIN.exists():
+    # Do NOT strip other listen lines (keep 80/2052/2095 etc.); only ensure target exists
+    if not _has_listen(conf, port):
+        conf = conf.replace("server {", f"server {{\n    listen {port};", 1)
+        vhost.write_text(conf, encoding="utf-8")
+    _open_firewall_port(port)
+    nginx = _resolve_nginx_bin()
+    if not nginx.exists():
         raise HTTPException(500, "未找到 Nginx")
-    test = subprocess.run([str(_NGINX_BIN), "-t"], capture_output=True, text=True)
+    test = subprocess.run([str(nginx), "-t"], capture_output=True, text=True)
     if test.returncode != 0:
         err = (test.stderr or test.stdout).strip()
         raise HTTPException(500, f"Nginx 配置失败: {err}")
-    rel = subprocess.run([str(_NGINX_BIN), "-s", "reload"], capture_output=True, text=True)
+    rel = subprocess.run([str(nginx), "-s", "reload"], capture_output=True, text=True)
     if rel.returncode != 0:
-        err = (rel.stderr or rel.stdout).strip()
-        raise HTTPException(500, f"Nginx 重载失败: {err}")
+        # Fallback for system nginx managed by systemd
+        rel2 = subprocess.run(["systemctl", "reload", "nginx"], capture_output=True, text=True)
+        if rel2.returncode != 0:
+            err = (rel.stderr or rel.stdout or rel2.stderr or rel2.stdout).strip()
+            raise HTTPException(500, f"Nginx 重载失败: {err}")
 
 
 def _apply_bind(host: str, http_port: int):

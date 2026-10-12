@@ -1,5 +1,12 @@
 # Changelog
 
+## [v2.1.23] - 2026-10-12
+
+### 修复
+- **非宝塔主机改对外端口失败**：`settings._nginx_vhost` / `_NGINX_BIN` 原先只认宝塔路径，系统 nginx（`/etc/nginx/sites-available/mediavault`、`/usr/sbin/nginx`）会报未配置
+- `_apply_public_port` 不再清空全部 `listen`（避免误删 80/2052/2095）；仅在缺失时追加 `listen {port};`，再 `nginx -t` + reload（失败时回退 `systemctl reload nginx`）
+- 防火墙：无 ufw 时用 iptables ACCEPT，并在有 netfilter-persistent 时保存
+
 ## [v2.1.22] - 2026-09-16
 
 ### 新增
