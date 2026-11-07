@@ -3,11 +3,11 @@ from datetime import datetime, timezone
 from ..core.database import Base
 
 class PaymentOrder(Base):
-    """USDT renewal order, mirrors an order on the external usdt-pay service."""
+    """Renewal payment order (USDT via external usdt-pay, or PayPal Orders v2)."""
     __tablename__ = "payment_orders"
 
     id = Column(Integer, primary_key=True, index=True)
-    # order id on the usdt-pay service, e.g. ORD-XXXXXXXXXX
+    # Local order id: USDT uses remote ORD-…; PayPal uses PP-…
     order_id = Column(String(64), unique=True, index=True, nullable=False)
     user_id = Column(Integer, nullable=False, index=True)
     amount_usd = Column(Float, nullable=False)
@@ -15,5 +15,9 @@ class PaymentOrder(Base):
     # pending | paid | expired
     status = Column(String(20), default="pending")
     tx_id = Column(String(128), default="")
+    # usdt | paypal  (default usdt for rows created before this column existed)
+    method = Column(String(16), default="usdt", nullable=False)
+    # PayPal order id (or other provider reference); empty for USDT
+    provider_order_id = Column(String(64), default="")
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     paid_at = Column(DateTime, nullable=True)

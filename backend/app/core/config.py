@@ -38,6 +38,13 @@ class Settings(BaseSettings):
     # External USDT (TRC20) payment service (usdt-pay).
     # Real value lives in backend/.env (gitignored) — do not commit server IPs.
     USDT_PAY_SERVER: str = "http://127.0.0.1:3000"
+    # Public site origin for PayPal return/cancel URLs (no trailing slash).
+    PUBLIC_BASE_URL: str = "https://web.cnsz.kdns.fr"
+    # PayPal Orders API v2 — leave blank to disable PayPal (USDT still works).
+    PAYPAL_CLIENT_ID: str = ""
+    PAYPAL_CLIENT_SECRET: str = ""
+    PAYPAL_MODE: str = "sandbox"  # sandbox | live
+    PAYPAL_WEBHOOK_ID: str = ""  # optional; enables webhook verification
 
     class Config:
         env_file = str(_ENV_PATH)

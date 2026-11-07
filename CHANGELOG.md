@@ -1,5 +1,23 @@
 # Changelog
 
+## [v2.1.27] - 2026-11-08
+
+### 新增
+- **PayPal 续费**：与现有 USDT 并列；`POST /api/payments/order` 支持 `method`（缺省 `usdt`，可选 `paypal`）
+  - `GET /api/payments/plans` 增加 `methods: ["usdt","paypal"]`（仅当已配置 Client ID+Secret 时含 paypal）；`currency` 改为 `USD`（兼容安卓：忽略未知字段即可）
+  - PayPal 使用 Orders API v2（`intent=CAPTURE`）；本地订单号 `PP-…`，PayPal id 存 `provider_order_id`
+  - `GET /api/payments/order/{id}` 对 pending 的 PayPal 单查询并在 APPROVED 时服务端 Capture，COMPLETED 后 `_grant_access`（幂等）
+  - `POST /api/payments/paypal/capture` 供 return URL 主动触发；可选 `POST /api/payments/paypal/webhook`（需 `PAYPAL_WEBHOOK_ID`）
+  - 配置：`PAYPAL_CLIENT_ID` / `PAYPAL_CLIENT_SECRET` / `PAYPAL_MODE`（sandbox|live，默认 sandbox）/ `PUBLIC_BASE_URL`（默认 `https://web.cnsz.kdns.fr`）
+  - 未配置密钥时 PayPal 下单返回 **503「PayPal 未配置」**；USDT 路径不受影响
+- 网页续费页：套餐后可选「USDT」或「PayPal」按钮；PayPal 未配置时隐藏并提示；支付成功文案兼容两种方式
+- `payment_orders` 表增加 `method`、`provider_order_id` 列（启动时 SQLite 轻量 ALTER）
+
+### 说明（Android / 客户端）
+- `/api/payments/plans` 多了 `methods`；旧客户端可忽略，仍只用 USDT 下单（`method` 缺省 usdt）
+- PayPal 入口先上网页；安卓若要跟，传 `method:"paypal"` 并打开返回的 `pay_url`，再轮询订单或调 capture 即可
+
+
 ## [v2.1.26] - 2026-10-12
 
 ### 修复

@@ -119,8 +119,29 @@ def _migrate_library_acl(sync_conn):
             except Exception:
                 pass
 
+def _migrate_payment_columns(sync_conn):
+    """Add method / provider_order_id for PayPal; existing rows stay usdt."""
+    try:
+        cols = {r[1] for r in sync_conn.execute(text("PRAGMA table_info(payment_orders)")).fetchall()}
+    except Exception:
+        return
+    if not cols:
+        return
+    alters = []
+    if "method" not in cols:
+        alters.append("ALTER TABLE payment_orders ADD COLUMN method VARCHAR(16) DEFAULT 'usdt'")
+    if "provider_order_id" not in cols:
+        alters.append("ALTER TABLE payment_orders ADD COLUMN provider_order_id VARCHAR(64) DEFAULT ''")
+    for sql in alters:
+        try:
+            sync_conn.execute(text(sql))
+        except Exception as exc:
+            if "duplicate column" not in str(exc).lower():
+                raise
+
+
 def init_db():
-    from ..models import User, MediaItem, MediaLibrary, PlaybackProgress, ScanJob, ActorPhoto, InviteCode, UserLibraryAccess  # noqa: F401
+    from ..models import User, MediaItem, MediaLibrary, PlaybackProgress, ScanJob, ActorPhoto, InviteCode, UserLibraryAccess, PaymentOrder  # noqa: F401
     try:
         Base.metadata.create_all(bind=engine)
     except Exception as exc:
@@ -130,3 +151,4 @@ def init_db():
         _migrate_media_columns(conn)
         _migrate_access_columns(conn)
         _migrate_library_acl(conn)
+        _migrate_payment_columns(conn)

@@ -88,3 +88,17 @@ MEDIA_ROOT=/www/mediavault/media
 ### 4. 访问
 
 浏览器打开 `http://你的IP/`
+
+## PayPal 续费（可选）
+
+在 `backend/.env`（或 `/etc/mediavault/mediavault.env`）填写：
+
+```
+PUBLIC_BASE_URL=https://web.cnsz.kdns.fr
+PAYPAL_CLIENT_ID=...
+PAYPAL_CLIENT_SECRET=...
+PAYPAL_MODE=sandbox
+# PAYPAL_WEBHOOK_ID=   # 可选；不填则靠轮询 / capture
+```
+
+未配置时网页只显示 USDT；PayPal 下单返回 503「PayPal 未配置」。改完后重启 mediavault 服务。
