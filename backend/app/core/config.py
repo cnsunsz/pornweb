@@ -36,7 +36,8 @@ class Settings(BaseSettings):
     SCRAPER_PROXY: str = ""
     SCRAPER_TIMEOUT_SECONDS: float = 8.0
     # External USDT (TRC20) payment service (usdt-pay).
-    # Real value lives in backend/.env (gitignored) — do not commit server IPs.
+    # Real value lives in /etc/mediavault/mediavault.env (or backend/.env) — do not commit server IPs.
+    USDT_PAY_ENABLED: bool = True  # admin can toggle; false hides usdt from methods
     USDT_PAY_SERVER: str = "http://127.0.0.1:3000"
     # Public site origin for PayPal return/cancel URLs (no trailing slash).
     PUBLIC_BASE_URL: str = "https://web.cnsz.kdns.fr"

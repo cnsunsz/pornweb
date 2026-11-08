@@ -18,7 +18,8 @@ KEYS = ("HTTP_PORT", "BIND_HOST", "PUBLIC_PORT", "MEDIA_ROOT", "APP_NAME",
         "SCRAPER_DOUBAN_ENABLED", "SCRAPER_TMDB_ENABLED", "SCRAPER_JAVDB_ENABLED",
         "TMDB_API_KEY", "SCRAPER_ORDER",
         "SCRAPER_DOUBAN_COOKIE", "SCRAPER_JAVDB_COOKIE", "SCRAPER_PROXY",
-        "SCRAPER_TIMEOUT_SECONDS")
+        "SCRAPER_TIMEOUT_SECONDS",
+        "USDT_PAY_ENABLED", "USDT_PAY_SERVER")
 _BACKEND_ENV = Path("/www/mediavault/backend/.env")
 def _nginx_vhost() -> Path:
     """Resolve mediavault nginx vhost: system sites-* first, Baota as fallback."""
@@ -173,6 +174,9 @@ class ServerSettings(BaseModel):
     scraper_javdb_cookie: str = ""
     scraper_proxy: str = ""
     scraper_timeout_seconds: float = Field(8.0, ge=2.0, le=30.0)
+    # USDT renewal (admin-tunable; hot-applied, no restart)
+    usdt_pay_enabled: bool = True
+    usdt_pay_server: str = ""
     env_file: str = ""
     restart_required: bool = False
 
@@ -198,6 +202,8 @@ class ServerSettingsUpdate(BaseModel):
     scraper_javdb_cookie: Optional[str] = None
     scraper_proxy: Optional[str] = None
     scraper_timeout_seconds: Optional[float] = Field(None, ge=2.0, le=30.0)
+    usdt_pay_enabled: Optional[bool] = None
+    usdt_pay_server: Optional[str] = None
 
 
 
@@ -404,6 +410,15 @@ def _current() -> ServerSettings:
             if env.get("SCRAPER_PROXY") is not None
             else (getattr(settings, "SCRAPER_PROXY", "") or ""),
         scraper_timeout_seconds=_timeout_seconds(env),
+        usdt_pay_enabled=_env_bool(
+            env.get("USDT_PAY_ENABLED"),
+            bool(getattr(settings, "USDT_PAY_ENABLED", True)),
+        ),
+        usdt_pay_server=(
+            env.get("USDT_PAY_SERVER")
+            if env.get("USDT_PAY_SERVER") is not None
+            else (getattr(settings, "USDT_PAY_SERVER", "") or "")
+        ),
         env_file=str(_ENV_PATH),
         restart_required=False,
     )
@@ -518,6 +533,17 @@ async def update_settings(req: ServerSettingsUpdate, admin: User = Depends(get_c
     if req.scraper_timeout_seconds is not None:
         updates["SCRAPER_TIMEOUT_SECONDS"] = str(req.scraper_timeout_seconds)
         cur.scraper_timeout_seconds = float(req.scraper_timeout_seconds)
+    if req.usdt_pay_enabled is not None:
+        updates["USDT_PAY_ENABLED"] = "true" if req.usdt_pay_enabled else "false"
+        cur.usdt_pay_enabled = req.usdt_pay_enabled
+    if req.usdt_pay_server is not None:
+        url = (req.usdt_pay_server or "").strip().rstrip("/")
+        if not url:
+            raise HTTPException(400, "USDT 支付地址不能为空")
+        if not (url.startswith("http://") or url.startswith("https://")):
+            raise HTTPException(400, "USDT 支付地址须以 http:// 或 https:// 开头")
+        updates["USDT_PAY_SERVER"] = url
+        cur.usdt_pay_server = url
     internet_on = bool(cur.scraper_internet_enabled)
     if internet_on and cur.scraper_tmdb_enabled and not (cur.tmdb_api_key or "").strip():
         raise HTTPException(400, "启用 TMDB 元数据下载时需要填写 TMDB API Key")
@@ -537,6 +563,11 @@ async def update_settings(req: ServerSettingsUpdate, admin: User = Depends(get_c
             apply_live_config(updates)
         except Exception:
             pass
+        # Hot-apply USDT payment toggles (no restart)
+        if "USDT_PAY_ENABLED" in updates:
+            settings.USDT_PAY_ENABLED = _env_bool(updates["USDT_PAY_ENABLED"], True)
+        if "USDT_PAY_SERVER" in updates:
+            settings.USDT_PAY_SERVER = updates["USDT_PAY_SERVER"]
     if restart:
         _apply_bind(cur.bind_host, cur.http_port)
         _schedule_backend_restart()

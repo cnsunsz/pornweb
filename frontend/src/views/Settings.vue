@@ -72,6 +72,28 @@
         </el-card>
 
 
+        <el-card style="margin-top:16px">
+          <template #header><span class="ch">{{ t('dash.payment') }}</span></template>
+          <p class="sub-hint">{{ t('dash.paymentHint') }}</p>
+          <el-form label-width="140px" style="max-width:720px">
+            <el-form-item :label="t('dash.usdtEnabled')">
+              <el-switch v-model="form.usdt_pay_enabled" />
+              <span class="note">{{ t('dash.usdtEnabledHint') }}</span>
+            </el-form-item>
+            <el-form-item :label="t('dash.usdtServer')">
+              <el-input
+                v-model="form.usdt_pay_server"
+                :placeholder="t('dash.usdtServerPh')"
+                :disabled="!form.usdt_pay_enabled"
+              />
+              <span class="note block">{{ t('dash.usdtServerHint') }}</span>
+            </el-form-item>
+            <el-form-item>
+              <el-button type="primary" :loading="saving" @click="saveServer">{{ t('dash.save') }}</el-button>
+            </el-form-item>
+          </el-form>
+        </el-card>
+
         <!-- Emby / Jellyfin-style metadata settings (admin-only; already gated by tab) -->
         <el-card style="margin-top:16px" class="meta-card">
           <template #header><span class="ch">{{ t('dash.metadata') }}</span></template>
@@ -466,6 +488,8 @@ const form = reactive({
   scraper_javdb_cookie: '',
   scraper_proxy: '',
   scraper_timeout_seconds: 8,
+  usdt_pay_enabled: true,
+  usdt_pay_server: '',
   env_file: ''
 })
 const expandTmdb = ref(false)
@@ -544,7 +568,9 @@ async function saveServer() {
       scraper_douban_cookie: form.scraper_douban_cookie,
       scraper_javdb_cookie: form.scraper_javdb_cookie,
       scraper_proxy: form.scraper_proxy,
-      scraper_timeout_seconds: form.scraper_timeout_seconds
+      scraper_timeout_seconds: form.scraper_timeout_seconds,
+      usdt_pay_enabled: form.usdt_pay_enabled,
+      usdt_pay_server: form.usdt_pay_server
     })
     Object.assign(form, res.data)
     restartHint.value = !!res.data.restart_required

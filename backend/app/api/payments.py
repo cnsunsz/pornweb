@@ -79,9 +79,16 @@ class CaptureRequest(BaseModel):
     order_id: str
 
 
+def _usdt_enabled() -> bool:
+    """Admin toggle USDT_PAY_ENABLED; default True when unset."""
+    return bool(getattr(settings, "USDT_PAY_ENABLED", True))
+
+
 @router.get("/plans")
 async def list_plans(user: User = Depends(get_current_user)):
-    methods = ["usdt"]
+    methods = []
+    if _usdt_enabled():
+        methods.append("usdt")
     if paypal_svc.paypal_configured():
         methods.append("paypal")
     return {
@@ -131,6 +138,8 @@ async def create_order(
     if method == "paypal":
         return await _create_paypal_order(db, user, plan)
 
+    if not _usdt_enabled():
+        raise HTTPException(503, "USDT 收款已关闭")
     return await _create_usdt_order(db, user, plan)
 
 

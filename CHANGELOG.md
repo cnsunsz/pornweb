@@ -1,5 +1,19 @@
 # Changelog
 
+## [v2.1.28] - 2026-11-08
+
+### 新增
+- **管理端 USDT 收款开关与地址**：控制台 → 服务器 →「收款 / 续费」
+  - `USDT_PAY_ENABLED`（默认 true）：关闭后 `GET /api/payments/plans` 的 `methods` 不再含 `usdt`；`POST /api/payments/order` 以 `method=usdt`（或缺省）下单返回 **503「USDT 收款已关闭」**
+  - `USDT_PAY_SERVER`：管理员可改外部 usdt-pay 的 base URL；写入 `/etc/mediavault/mediavault.env`（及已有 backend/.env），**热更新立即生效**，无需重启
+  - 设置读写走现有 `GET/PUT /api/settings/`（仅 admin）；PayPal 不受影响
+- 网页续费页：按 `methods` 隐藏 USDT / PayPal 按钮；两者皆无时提示「暂无可用支付方式」
+
+### 说明（Android / 客户端）
+- 关 USDT 后 `methods` 少 `usdt`，已发版客户端（读 methods）会自然不显示入口；无需立刻跟版
+- 旧客户端若写死只下 USDT，关开关后会收到 503 文案
+
+
 ## [v2.1.27] - 2026-11-08
 
 ### 新增

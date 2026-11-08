@@ -24,6 +24,7 @@
       <!-- pay method buttons -->
       <div v-if="!order" class="pay-actions">
         <el-button
+          v-if="usdtAvailable"
           type="primary"
           size="large"
           class="pay-btn"
@@ -44,7 +45,8 @@
         >
           {{ t('pay.payBtnPaypal') }}
         </el-button>
-        <div v-else class="paypal-off">{{ t('pay.paypalOff') }}</div>
+        <div v-if="!usdtAvailable && !paypalAvailable" class="paypal-off">{{ t('pay.noMethods') }}</div>
+        <div v-else-if="!paypalAvailable" class="paypal-off">{{ t('pay.paypalOff') }}</div>
       </div>
 
       <!-- waiting for payment -->
@@ -111,6 +113,7 @@ const planId = ref('p30')
 const creating = ref(false)
 const pendingMethod = ref('')
 const capturing = ref(false)
+const usdtAvailable = ref(true)
 const paypalAvailable = ref(false)
 const order = ref(null) // { order_id, pay_url, days, amount, status, method }
 let timer = null
@@ -120,6 +123,7 @@ onMounted(async () => {
     const res = await getPlans()
     plans.value = res.data?.plans || []
     const methods = res.data?.methods || ['usdt']
+    usdtAvailable.value = methods.includes('usdt')
     paypalAvailable.value = methods.includes('paypal')
   } catch { /* non-fatal */ }
 
