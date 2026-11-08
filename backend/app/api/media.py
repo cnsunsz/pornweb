@@ -44,6 +44,7 @@ class MediaResponse(BaseModel):
     fanart_url: str
     category: str
     filename: str
+    file_path: str = ""
     file_size: int
     folder: str
     created_at: str
@@ -174,6 +175,7 @@ def _to_response(item: MediaItem, progress=None, probe: Optional[dict] = None) -
         director=item.director or "", cast_list=item.cast_list or "[]",
         poster_url=_public_poster_url(item), fanart_url=_public_fanart_url(item),
         category=item.category or "movie", filename=item.filename,
+        file_path=item.file_path or "",
         file_size=item.file_size or 0, folder=item.folder or "/",
         created_at=item.created_at.isoformat() if item.created_at else "",
         extra_files=_parts(item),

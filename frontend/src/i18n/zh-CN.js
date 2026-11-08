@@ -279,6 +279,7 @@ export default {
     year: '年份',
     rating: '评分',
     size: '大小',
+    filePath: '文件路径',
     actions: '操作',
     delete: '删除',
     rename: '改名',

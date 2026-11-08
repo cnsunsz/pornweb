@@ -227,7 +227,7 @@ export default {
   lib: {
     title: 'ライブラリ管理', add: 'ライブラリを追加', path: 'パス', pathPh: 'フォルダパス（例: D:\\Movies）',
     namePh: '表示名', mixed: '混在', scan: 'スキャン', libraries: 'ライブラリ', list: 'メディア',
-    total: '{n} 件', titleCol: 'タイトル', type: '種類', year: '年', rating: '評価', size: 'サイズ',
+    total: '{n} 件', titleCol: 'タイトル', type: '種類', year: '年', rating: '評価', size: 'サイズ', filePath: 'ファイルパス',
     actions: '操作', delete: '削除', rename: '名前変更', rescan: '再スキャン', remove: '削除',
     pathReq: 'パスを入力', nameReq: '名前を入力', scanOk: 'スキャン完了', scanFail: 'スキャン失敗',
     existsRescan: '既に存在するため再スキャンしました', renamed: '名前を変更しました', removed: '削除しました', deleted: '削除しました',

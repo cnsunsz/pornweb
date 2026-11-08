@@ -1,5 +1,12 @@
 # Changelog
 
+## [v2.1.29] - 2026-11-08
+
+### 新增
+- **管理端媒体列表显示文件路径**：控制台 → 媒体库 →「媒体列表」新增「文件路径」列（过长截断 + tooltip）
+  - `MediaResponse` / `GET /api/media/list`（及详情）增加字段 `file_path`（来自 `media_items.file_path`）
+  - 路径对已有媒体访问权限的用户可见（与既有 `folder`/`filename` 同级）；普通首页卡片不展示该列
+
 ## [v2.1.28] - 2026-11-08
 
 ### 新增

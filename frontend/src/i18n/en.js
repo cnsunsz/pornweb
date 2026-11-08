@@ -233,7 +233,7 @@ export default {
   lib: {
     title: 'Libraries', add: 'Add library', path: 'Path', pathPh: 'Folder path, e.g. D:\\Movies',
     namePh: 'Display name', mixed: 'Mixed', scan: 'Scan', libraries: 'Libraries', list: 'Media',
-    total: '{n} items', titleCol: 'Title', type: 'Type', year: 'Year', rating: 'Rating', size: 'Size',
+    total: '{n} items', titleCol: 'Title', type: 'Type', year: 'Year', rating: 'Rating', size: 'Size', filePath: 'File path',
     actions: 'Actions', delete: 'Delete', rename: 'Rename', rescan: 'Scan', remove: 'Remove',
     pathReq: 'Enter a path', nameReq: 'Enter a name', scanOk: 'Scan complete', scanFail: 'Scan failed',
     existsRescan: 'Library already exists; rescanned', renamed: 'Renamed', removed: 'Removed', deleted: 'Deleted',

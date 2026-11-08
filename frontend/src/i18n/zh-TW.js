@@ -227,7 +227,7 @@ export default {
   lib: {
     title: '媒體庫管理', add: '新增媒體庫', path: '路徑', pathPh: '媒體資料夾路徑，如 D:\\Movies',
     namePh: '庫名稱（顯示名稱）', mixed: '混合', scan: '掃描', libraries: '媒體庫', list: '媒體清單',
-    total: '共 {n} 項', titleCol: '標題', type: '類型', year: '年份', rating: '評分', size: '大小',
+    total: '共 {n} 項', titleCol: '標題', type: '類型', year: '年份', rating: '評分', size: '大小', filePath: '檔案路徑',
     actions: '操作', delete: '刪除', rename: '重新命名', rescan: '重新掃描', remove: '移除',
     pathReq: '請輸入路徑', nameReq: '請輸入庫名稱', scanOk: '掃描完成', scanFail: '掃描失敗',
     existsRescan: '該庫已存在，已重新掃描', renamed: '已重新命名', removed: '已移除', deleted: '已刪除',

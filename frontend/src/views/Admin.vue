@@ -104,6 +104,11 @@
         <el-table-column :label="t('lib.size')" width="80">
           <template #default="{row}">{{ fmtSize(row.file_size) }}</template>
         </el-table-column>
+        <el-table-column :label="t('lib.filePath')" min-width="220" show-overflow-tooltip>
+          <template #default="{row}">
+            <span class="media-file-path" :title="row.file_path || ''">{{ row.file_path || '-' }}</span>
+          </template>
+        </el-table-column>
         <el-table-column :label="t('lib.actions')" width="60" fixed="right">
           <template #default="{row}"><el-button type="danger" size="small" text @click="del(row)">{{ t('lib.delete') }}</el-button></template>
         </el-table-column>
@@ -373,6 +378,7 @@ onMounted(async () => {
 .lib-text { min-width:0; }
 .lib-name { font-weight:600; font-size:14px; }
 .lib-path { font-size:12px; color:var(--text-muted); margin-top:2px; word-break:break-all; }
+.media-file-path { font-size:12px; color:var(--text-muted); font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; }
 .lib-acts { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
 .lib-scan { padding-top:2px; }
 .lib-scan-row { display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; gap:8px; }
