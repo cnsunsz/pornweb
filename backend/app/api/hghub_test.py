@@ -1,4 +1,4 @@
-"""Admin-only test API that calls the Huangguo edge envelope.
+"""Test API that calls the Huangguo edge envelope.
 
 These routes never write to PornWeb libraries. They exist so the official
 HGhub wire protocol can be exercised from this project.
@@ -14,9 +14,9 @@ from pydantic import BaseModel, Field
 
 from ..models.user import User
 from ..services.hghub_edge import DEFAULT_BASE, FIXED_LINES, edge_request, normalize_base
-from .deps import get_current_admin
+from .deps import require_media_access
 
-router = APIRouter(prefix="/api/hghub-test", tags=["hghub-test"])
+router = APIRouter(prefix="/api/hghub-test", tags=["transfer"])
 
 
 def _http_error(exc: Exception) -> HTTPException:
@@ -44,7 +44,7 @@ async def _call(method: str, path: str, **kwargs) -> dict[str, Any]:
 
 
 @router.get("/lines")
-async def list_lines(_admin: User = Depends(get_current_admin)):
+async def list_lines(_admin: User = Depends(require_media_access)):
     return {
         "default": DEFAULT_BASE,
         "fixed": list(FIXED_LINES),
@@ -58,7 +58,7 @@ async def feed(
     page: int = Query(1, ge=1, le=100),
     size: int = Query(10, ge=1, le=50),
     base: str | None = None,
-    _admin: User = Depends(get_current_admin),
+    _admin: User = Depends(require_media_access),
 ):
     return await _call("GET", f"/api/videos?page={page}&size={size}", base=base)
 
@@ -69,7 +69,7 @@ async def search(
     page: int = Query(1, ge=1, le=100),
     size: int = Query(10, ge=1, le=50),
     base: str | None = None,
-    _admin: User = Depends(get_current_admin),
+    _admin: User = Depends(require_media_access),
 ):
     from urllib.parse import quote
     return await _call("GET", f"/api/search?q={quote(q)}&page={page}&size={size}", base=base)
@@ -79,7 +79,7 @@ async def search(
 async def video_detail(
     video_id: int,
     base: str | None = None,
-    _admin: User = Depends(get_current_admin),
+    _admin: User = Depends(require_media_access),
 ):
     if video_id <= 0:
         raise HTTPException(status_code=400, detail="视频 ID 无效")
@@ -95,7 +95,7 @@ class EdgeIn(BaseModel):
 
 
 @router.post("/edge")
-async def raw_edge(payload: EdgeIn, _admin: User = Depends(get_current_admin)):
+async def raw_edge(payload: EdgeIn, _admin: User = Depends(require_media_access)):
     return await _call(
         payload.method,
         payload.path,

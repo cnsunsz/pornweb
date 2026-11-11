@@ -1,5 +1,5 @@
 export default {
-  nav: { home: '首頁', actors: '演員', libraries: '分類', console: '控制台', hghubTest: '黃果測試', settings: '設定', logout: '登出' },
+  nav: { home: '首頁', actors: '演員', libraries: '分類', console: '控制台', hghubTest: '轉接', transfer: '轉接', settings: '設定', logout: '登出' },
   auth: {
     loginTitle: '登入您的帳戶',
     registerTitle: '建立新帳戶',

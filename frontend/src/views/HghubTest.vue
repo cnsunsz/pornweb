@@ -2,11 +2,11 @@
   <div class="page">
     <div class="head">
       <div>
-        <h1>黄果接口测试</h1>
-        <p class="note">只给管理员做连通性测试，结果不会写入 PornWeb 媒体库。</p>
+        <h1>转接</h1>
+        <p class="note">来自黄果的内容，只做浏览测试，不会写入本地媒体库。</p>
       </div>
       <div class="controls">
-        <el-select v-model="base" size="small" style="width: 220px">
+        <el-select v-model="base" size="small" style="width: 220px" @change="doFeed">
           <el-option
             v-for="line in lines"
             :key="line.url"
@@ -18,17 +18,19 @@
           v-model="q"
           size="small"
           clearable
-          placeholder="搜索"
-          style="width: 180px"
+          placeholder="搜索黄果"
+          style="width: 200px"
           @keyup.enter="doSearch"
         />
-        <el-button size="small" type="primary" :loading="loading" @click="doFeed">拉首页</el-button>
+        <el-button size="small" type="primary" :loading="loading" @click="doFeed">首页</el-button>
         <el-button size="small" :loading="loading" :disabled="!q.trim()" @click="doSearch">搜索</el-button>
       </div>
     </div>
 
     <p v-if="meta" class="meta">{{ meta }}</p>
     <el-alert v-if="error" type="error" :title="error" show-icon :closable="false" style="margin-bottom: 16px" />
+
+    <div v-if="loading && !items.length" class="loading">正在加载…</div>
 
     <div v-if="items.length" class="grid">
       <button v-for="item in items" :key="item.id" class="card" @click="openDetail(item)">
@@ -41,7 +43,14 @@
       </button>
     </div>
 
-    <pre v-if="detail" class="json">{{ detail }}</pre>
+    <div v-if="selected" class="detail">
+      <div class="detail-head">
+        <h2>{{ selected.title || '详情' }}</h2>
+        <el-button size="small" text @click="selected = null; detail = ''">关闭</el-button>
+      </div>
+      <p v-if="selected.description" class="desc">{{ selected.description }}</p>
+      <pre class="json">{{ detail }}</pre>
+    </div>
   </div>
 </template>
 
@@ -60,35 +69,36 @@ const error = ref('')
 const meta = ref('')
 const items = ref([])
 const detail = ref('')
+const selected = ref(null)
 
 function params() {
   return { base: base.value }
 }
 
-function applyResult(res, fallbackItems) {
+function applyResult(res) {
   const body = res.data || {}
   const data = body.data
-  const list = data?.items || fallbackItems || []
+  const list = data?.items || []
   items.value = Array.isArray(list) ? list : []
+  selected.value = null
+  detail.value = ''
   const total = data?.pagination?.total
   const ms = body.elapsed_ms
   meta.value = [
     body.base,
-    body.path,
     ms != null ? `${ms} ms` : '',
     total != null ? `共 ${total} 条` : `${items.value.length} 条`,
   ].filter(Boolean).join(' · ')
-  detail.value = JSON.stringify(data, null, 2)
 }
 
 async function run(fn) {
   loading.value = true
   error.value = ''
-  meta.value = ''
   try {
     applyResult(await fn())
   } catch (e) {
     items.value = []
+    selected.value = null
     detail.value = ''
     error.value = e.response?.data?.detail || e.message || '请求失败'
   } finally {
@@ -97,13 +107,13 @@ async function run(fn) {
 }
 
 function doFeed() {
-  return run(() => hghubFeed({ page: 1, size: 12, ...params() }))
+  return run(() => hghubFeed({ page: 1, size: 24, ...params() }))
 }
 
 function doSearch() {
   const query = q.value.trim()
   if (!query) return
-  return run(() => hghubSearch({ q: query, page: 1, size: 12, ...params() }))
+  return run(() => hghubSearch({ q: query, page: 1, size: 24, ...params() }))
 }
 
 async function openDetail(item) {
@@ -112,8 +122,9 @@ async function openDetail(item) {
   try {
     const res = await hghubVideo(item.id, params())
     const body = res.data || {}
-    meta.value = [body.base, body.path, body.elapsed_ms != null ? `${body.elapsed_ms} ms` : ''].filter(Boolean).join(' · ')
+    selected.value = body.data || item
     detail.value = JSON.stringify(body.data, null, 2)
+    meta.value = [body.base, body.elapsed_ms != null ? `${body.elapsed_ms} ms` : ''].filter(Boolean).join(' · ')
   } catch (e) {
     error.value = e.response?.data?.detail || e.message || '详情失败'
   } finally {
@@ -129,7 +140,9 @@ onMounted(async () => {
     if (data.default) base.value = data.default
   } catch (e) {
     error.value = e.response?.data?.detail || e.message || '无法读取线路'
+    return
   }
+  await doFeed()
 })
 </script>
 
@@ -137,14 +150,19 @@ onMounted(async () => {
 .page { color: var(--text, #eee); }
 .head { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; align-items: flex-end; margin-bottom: 16px; }
 h1 { margin: 0 0 6px; font-size: 20px; }
-.note, .meta { margin: 0; color: var(--muted, #999); font-size: 13px; }
+.note, .meta, .desc { margin: 0; color: var(--muted, #999); font-size: 13px; }
 .meta { margin: 0 0 14px; }
 .controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.loading { padding: 40px 0; text-align: center; color: #888; }
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
 .card { text-align: left; background: var(--card, #1a1a1a); border: 0; border-radius: 8px; overflow: hidden; color: inherit; cursor: pointer; padding: 0; }
 .card img, .ph { width: 100%; aspect-ratio: 3/4; object-fit: cover; background: #222; display: block; }
 .cap { padding: 8px; display: flex; flex-direction: column; gap: 2px; }
 .cap strong { font-size: 13px; line-height: 1.3; }
 .cap span { font-size: 11px; color: #888; }
-.json { margin-top: 18px; padding: 12px; background: #111; border-radius: 8px; overflow: auto; font-size: 12px; line-height: 1.45; max-height: 480px; }
+.detail { margin-top: 22px; padding: 14px; background: #141414; border-radius: 10px; }
+.detail-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.detail-head h2 { margin: 0; font-size: 16px; }
+.desc { margin: 10px 0 0; white-space: pre-wrap; }
+.json { margin-top: 14px; padding: 12px; background: #111; border-radius: 8px; overflow: auto; font-size: 12px; line-height: 1.45; max-height: 420px; }
 </style>

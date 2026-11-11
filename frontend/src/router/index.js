@@ -56,10 +56,14 @@ const routes = [
     meta: { requiresAuth: true }
   },
   {
-    path: '/hghub-test',
-    name: 'HghubTest',
+    path: '/transfer',
+    name: 'Transfer',
     component: () => import('@/views/HghubTest.vue'),
-    meta: { requiresAuth: true, requiresAdmin: true }
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/hghub-test',
+    redirect: '/transfer'
   }
 ]
 

@@ -1,5 +1,5 @@
 export default {
-  nav: { home: '首页', actors: '演员', libraries: '分类', console: '控制台', hghubTest: '黄果测试', settings: '设置', logout: '退出登录' },
+  nav: { home: '首页', actors: '演员', libraries: '分类', console: '控制台', hghubTest: '转接', transfer: '转接', settings: '设置', logout: '退出登录' },
   auth: {
     loginTitle: '登录您的账户',
     registerTitle: '创建新账户',
