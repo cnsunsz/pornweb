@@ -54,6 +54,12 @@ const routes = [
     name: 'Settings',
     component: () => import('@/views/Settings.vue'),
     meta: { requiresAuth: true }
+  },
+  {
+    path: '/hghub-test',
+    name: 'HghubTest',
+    component: () => import('@/views/HghubTest.vue'),
+    meta: { requiresAuth: true, requiresAdmin: true }
   }
 ]
 

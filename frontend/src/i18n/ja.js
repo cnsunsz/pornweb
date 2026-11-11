@@ -1,5 +1,5 @@
 export default {
-  nav: { home: 'ホーム', actors: '出演者', libraries: 'カテゴリ', console: 'ダッシュボード', settings: '設定', logout: 'ログアウト' },
+  nav: { home: 'ホーム', actors: '出演者', libraries: 'カテゴリ', console: 'ダッシュボード', hghubTest: '黄果テスト', settings: '設定', logout: 'ログアウト' },
   auth: {
     loginTitle: 'アカウントにログイン',
     registerTitle: 'アカウントを作成',

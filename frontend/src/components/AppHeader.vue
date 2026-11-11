@@ -24,6 +24,7 @@
         <router-link v-if="!auth.isAdmin" to="/renew" class="nav-item renew" :class="{active: $route.path==='/renew'}">{{ t('pay.bannerBtn') }}</router-link>
         <router-link v-if="auth.isAdmin" to="/settings?tab=libraries" class="nav-item" :class="{active: $route.path==='/settings' && ($route.query.tab==='libraries' || !$route.query.tab)}">{{ t('nav.libraries') }}</router-link>
         <router-link v-if="auth.isAdmin" to="/settings?tab=server" class="nav-item" :class="{active: $route.path==='/settings' && $route.query.tab==='server'}">{{ t('nav.console') }}</router-link>
+        <router-link v-if="auth.isAdmin" to="/hghub-test" class="nav-item" :class="{active: $route.path==='/hghub-test'}">{{ t('nav.hghubTest') }}</router-link>
       </nav>
 
       <el-dropdown trigger="click" @command="onCommand">

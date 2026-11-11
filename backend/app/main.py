@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from .core.config import settings
 from .core.database import init_db
 from .models import User, MediaItem, MediaLibrary, PlaybackProgress, ScanJob, InviteCode, UserLibraryAccess, PaymentOrder  # noqa: F401
-from .api import auth, media, users, media_folders, libraries, settings as settings_api, actors, invite_codes, payments
+from .api import auth, media, users, media_folders, libraries, settings as settings_api, actors, invite_codes, payments, hghub_test
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -66,6 +66,7 @@ app.include_router(settings_api.router)
 app.include_router(actors.router)
 app.include_router(invite_codes.router)
 app.include_router(payments.router)
+app.include_router(hghub_test.router)
 
 @app.get("/api/health")
 async def health():

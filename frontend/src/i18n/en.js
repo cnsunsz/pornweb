@@ -1,5 +1,5 @@
 export default {
-  nav: { home: 'Home', actors: 'Actors', libraries: 'Categories', console: 'Dashboard', settings: 'Settings', logout: 'Sign out' },
+  nav: { home: 'Home', actors: 'Actors', libraries: 'Categories', console: 'Dashboard', hghubTest: 'HG test', settings: 'Settings', logout: 'Sign out' },
   auth: {
     loginTitle: 'Sign in to your account',
     registerTitle: 'Create an account',

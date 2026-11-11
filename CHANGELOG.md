@@ -1,5 +1,13 @@
 # Changelog
 
+## [Unreleased]
+
+### 新增
+- **黄果接口测试（仅管理员）**：接入黄果官方信封 `POST /api/edge/request`，用于在 PornWeb 里验证首页/搜索/详情，不写入媒体库，也不走现有片源
+  - 后端：`GET /api/hghub-test/feed|search|video/{id}`，以及 `POST /api/hghub-test/edge`
+  - 管理页：`/hghub-test`（顶栏「黄果测试」）
+
+
 ## [v2.1.29] - 2026-11-08
 
 ### 新增
